@@ -905,8 +905,8 @@ module.exports = async function handler(req, res) {
 
     // 2. Get pages - use brand connections if available, otherwise try /me/accounts
     try {
-      // Check cache first for pages
-      const pagesCacheKey = 'pages_data';
+      // Check cache first for pages - include brandId in cache key for brand-specific data
+      const pagesCacheKey = brandId ? `pages_data_${brandId}` : 'pages_data';
       if (API_CACHE.data[pagesCacheKey] && (Date.now() - API_CACHE.timestamps[pagesCacheKey] < API_CACHE.TTL)) {
         console.log('Using cached pages data');
         response.pages = API_CACHE.data[pagesCacheKey].pages;
