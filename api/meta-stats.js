@@ -1104,17 +1104,21 @@ module.exports = async function handler(req, res) {
           try {
             console.log(`Fetching posts for Facebook page ${page.id}`);
 
-            // Use the same function as summary-stats.js
-            const fbPostsResult = await getFacebookPostsCount(
-              page.id,
-              dateRange.from,
-              dateRange.to,
-              25, // Limit to 25 posts
-              response.account?.timezone, // Pass business timezone from account
-              { accessToken: facebookAccessToken } // Pass OAuth token
-            );
+            // Temporarily set the access token in environment for the function to use
+            const originalToken = process.env.META_ACCESS_TOKEN;
+            process.env.META_ACCESS_TOKEN = facebookAccessToken;
 
-          console.log(`Successfully fetched ${fbPostsResult.count} Facebook posts, showing ${fbPostsResult.details.length}`);
+            try {
+              // Use the same function as summary-stats.js
+              const fbPostsResult = await getFacebookPostsCount(
+                page.id,
+                dateRange.from,
+                dateRange.to,
+                25, // Limit to 25 posts
+                response.account?.timezone // Pass business timezone from account
+              );
+
+              console.log(`Successfully fetched ${fbPostsResult.count} Facebook posts, showing ${fbPostsResult.details.length}`);
 
           // Check if we have posts to process
           if (fbPostsResult.details && fbPostsResult.details.length > 0) {
@@ -1217,11 +1221,18 @@ module.exports = async function handler(req, res) {
             response.posts.facebook = [];
           }
 
-          // Cache the Facebook posts
-          API_CACHE.data[fbPostsCacheKey] = response.posts.facebook;
-          API_CACHE.timestamps[fbPostsCacheKey] = Date.now();
-          console.log(`Cached ${response.posts.facebook.length} Facebook posts for page ${page.id}`);
-
+              // Cache the Facebook posts
+              API_CACHE.data[fbPostsCacheKey] = response.posts.facebook;
+              API_CACHE.timestamps[fbPostsCacheKey] = Date.now();
+              console.log(`Cached ${response.posts.facebook.length} Facebook posts for page ${page.id}`);
+            } finally {
+              // Restore the original token
+              if (originalToken) {
+                process.env.META_ACCESS_TOKEN = originalToken;
+              } else {
+                delete process.env.META_ACCESS_TOKEN;
+              }
+            }
           } catch (postsError) {
             console.error(`Error fetching Facebook posts:`, postsError.message);
             console.error('Error details:', postsError.response?.data || 'No response data');
