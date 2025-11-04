@@ -780,10 +780,20 @@ module.exports = async function handler(req, res) {
           if (connections.facebook_page) {
             facebookAccessToken = connections.facebook_page.access_token;
             fbPageIdToUse = fbPageIdToUse || connections.facebook_page.page_id;
+            console.log('Facebook page connection found:', {
+              hasToken: !!facebookAccessToken,
+              pageId: connections.facebook_page.page_id,
+              allFields: Object.keys(connections.facebook_page)
+            });
           }
           if (connections.instagram_page) {
             instagramAccessToken = connections.instagram_page.access_token;
             instaPageIdToUse = instaPageIdToUse || connections.instagram_page.account_id;
+            console.log('Instagram page connection found:', {
+              hasToken: !!instagramAccessToken,
+              accountId: connections.instagram_page.account_id,
+              allFields: Object.keys(connections.instagram_page)
+            });
           }
           if (connections.meta_ads) {
             metaAdsAccessToken = connections.meta_ads.access_token;
@@ -904,72 +914,97 @@ module.exports = async function handler(req, res) {
       } else {
         console.log('Fetching pages...');
 
-        // If we have a Facebook page ID from brand connections, fetch that page directly
-        if (fbPageIdToUse && facebookAccessToken) {
+        // If we have a Facebook access token, try to get the page info
+        if (facebookAccessToken) {
           try {
-            console.log(`Fetching Facebook page ${fbPageIdToUse} directly from brand connections`);
+            // First, try to get the page ID using /me endpoint if we don't have it
+            let pageIdToFetch = fbPageIdToUse;
 
-            const pageResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${fbPageIdToUse}`, {
-              params: {
-                access_token: facebookAccessToken,
-                fields: 'id,name,followers_count,fan_count,talking_about_count,link,verification_status,picture,instagram_business_account'
+            if (!pageIdToFetch) {
+              try {
+                console.log('Fetching page ID using /me endpoint with Facebook token');
+                const meResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/me`, {
+                  params: {
+                    access_token: facebookAccessToken,
+                    fields: 'id,name'
+                  }
+                });
+
+                if (meResponse.data && meResponse.data.id) {
+                  pageIdToFetch = meResponse.data.id;
+                  console.log(`Got page ID from /me endpoint: ${pageIdToFetch}`);
+                }
+              } catch (meError) {
+                console.error('Error fetching page ID from /me endpoint:', meError.message);
               }
-            });
+            }
 
-            if (pageResponse.data) {
-              const page = pageResponse.data;
-              const pageData = {
-                id: page.id,
-                name: page.name,
-                followers: page.followers_count || 0,
-                likes: page.fan_count || 0,
-                talking_about: page.talking_about_count || 0,
-                link: page.link,
-                verified: page.verification_status === 'blue_verified',
-                picture: page.picture?.data?.url,
-                instagram_business_account: page.instagram_business_account?.id || null,
-                access_token: facebookAccessToken // Use the token from brand
-              };
+            // Now fetch the page details
+            if (pageIdToFetch) {
+              console.log(`Fetching Facebook page ${pageIdToFetch} from brand connections`);
 
-              response.pages.push(pageData);
-              console.log(`Successfully fetched Facebook page: ${page.name}`);
+              const pageResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageIdToFetch}`, {
+                params: {
+                  access_token: facebookAccessToken,
+                  fields: 'id,name,followers_count,fan_count,talking_about_count,link,verification_status,picture,instagram_business_account'
+                }
+              });
 
-              // If this page has an Instagram business account, fetch its details
-              if (page.instagram_business_account && page.instagram_business_account.id) {
-                try {
-                  const instagramId = page.instagram_business_account.id;
-                  console.log(`Fetching Instagram account ${instagramId} linked to Facebook page`);
+              if (pageResponse.data) {
+                const page = pageResponse.data;
+                const pageData = {
+                  id: page.id,
+                  name: page.name,
+                  followers: page.followers_count || 0,
+                  likes: page.fan_count || 0,
+                  talking_about: page.talking_about_count || 0,
+                  link: page.link,
+                  verified: page.verification_status === 'blue_verified',
+                  picture: page.picture?.data?.url,
+                  instagram_business_account: page.instagram_business_account?.id || null,
+                  access_token: facebookAccessToken // Use the token from brand
+                };
 
-                  const instagramResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${instagramId}`, {
-                    params: {
-                      access_token: instagramAccessToken || facebookAccessToken,
-                      fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count,website,biography'
-                    }
-                  });
+                response.pages.push(pageData);
+                console.log(`Successfully fetched Facebook page: ${page.name}`);
 
-                  const instagramData = {
-                    id: instagramResponse.data.id,
-                    username: instagramResponse.data.username,
-                    name: instagramResponse.data.name,
-                    picture: instagramResponse.data.profile_picture_url,
-                    followers: instagramResponse.data.followers_count || 0,
-                    following: instagramResponse.data.follows_count || 0,
-                    media_count: instagramResponse.data.media_count || 0,
-                    website: instagramResponse.data.website,
-                    biography: instagramResponse.data.biography,
-                    linked_page_id: page.id,
-                    linked_page_name: page.name
-                  };
+                // If this page has an Instagram business account, fetch its details
+                if (page.instagram_business_account && page.instagram_business_account.id) {
+                  try {
+                    const instagramId = page.instagram_business_account.id;
+                    console.log(`Fetching Instagram account ${instagramId} linked to Facebook page`);
 
-                  response.instagram.push(instagramData);
-                  console.log(`Successfully fetched Instagram account: ${instagramResponse.data.username}`);
-                } catch (instagramError) {
-                  console.error(`Error fetching Instagram account:`, instagramError.message);
+                    const instagramResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${instagramId}`, {
+                      params: {
+                        access_token: instagramAccessToken || facebookAccessToken,
+                        fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count,website,biography'
+                      }
+                    });
+
+                    const instagramData = {
+                      id: instagramResponse.data.id,
+                      username: instagramResponse.data.username,
+                      name: instagramResponse.data.name,
+                      picture: instagramResponse.data.profile_picture_url,
+                      followers: instagramResponse.data.followers_count || 0,
+                      following: instagramResponse.data.follows_count || 0,
+                      media_count: instagramResponse.data.media_count || 0,
+                      website: instagramResponse.data.website,
+                      biography: instagramResponse.data.biography,
+                      linked_page_id: page.id,
+                      linked_page_name: page.name
+                    };
+
+                    response.instagram.push(instagramData);
+                    console.log(`Successfully fetched Instagram account: ${instagramResponse.data.username}`);
+                  } catch (instagramError) {
+                    console.error(`Error fetching Instagram account:`, instagramError.message);
+                  }
                 }
               }
             }
           } catch (pageError) {
-            console.error(`Error fetching Facebook page ${fbPageIdToUse}:`, pageError.message);
+            console.error(`Error fetching Facebook page:`, pageError.message);
           }
         }
 
