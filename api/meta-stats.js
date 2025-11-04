@@ -917,33 +917,8 @@ module.exports = async function handler(req, res) {
         // If we have a Facebook access token, try to get the page info
         if (facebookAccessToken) {
           try {
-            // First, try to get the page ID using /me endpoint if we don't have it
+            // Use the page ID from brand connections if available
             let pageIdToFetch = fbPageIdToUse;
-
-            if (!pageIdToFetch) {
-              try {
-                console.log('Fetching page ID using /me endpoint with Facebook token');
-                const meResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/me`, {
-                  params: {
-                    access_token: facebookAccessToken,
-                    fields: 'id,name'
-                  }
-                });
-
-                if (meResponse.data && meResponse.data.id) {
-                  pageIdToFetch = meResponse.data.id;
-                  console.log(`Got page ID from /me endpoint: ${pageIdToFetch}`);
-                } else if (meResponse.data && meResponse.data.error) {
-                  console.error('Facebook API error from /me endpoint:', meResponse.data.error);
-                }
-              } catch (meError) {
-                console.error('Error fetching page ID from /me endpoint:', {
-                  message: meError.message,
-                  status: meError.response?.status,
-                  data: meError.response?.data
-                });
-              }
-            }
 
             // Now fetch the page details
             if (pageIdToFetch) {
