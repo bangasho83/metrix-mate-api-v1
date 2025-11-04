@@ -933,9 +933,15 @@ module.exports = async function handler(req, res) {
                 if (meResponse.data && meResponse.data.id) {
                   pageIdToFetch = meResponse.data.id;
                   console.log(`Got page ID from /me endpoint: ${pageIdToFetch}`);
+                } else if (meResponse.data && meResponse.data.error) {
+                  console.error('Facebook API error from /me endpoint:', meResponse.data.error);
                 }
               } catch (meError) {
-                console.error('Error fetching page ID from /me endpoint:', meError.message);
+                console.error('Error fetching page ID from /me endpoint:', {
+                  message: meError.message,
+                  status: meError.response?.status,
+                  data: meError.response?.data
+                });
               }
             }
 
@@ -943,14 +949,17 @@ module.exports = async function handler(req, res) {
             if (pageIdToFetch) {
               console.log(`Fetching Facebook page ${pageIdToFetch} from brand connections`);
 
-              const pageResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageIdToFetch}`, {
-                params: {
-                  access_token: facebookAccessToken,
-                  fields: 'id,name,followers_count,fan_count,talking_about_count,link,verification_status,picture,instagram_business_account'
-                }
-              });
+              try {
+                const pageResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageIdToFetch}`, {
+                  params: {
+                    access_token: facebookAccessToken,
+                    fields: 'id,name,followers_count,fan_count,talking_about_count,link,verification_status,picture,instagram_business_account'
+                  }
+                });
 
-              if (pageResponse.data) {
+                if (pageResponse.data && pageResponse.data.error) {
+                  console.error('Facebook API error fetching page:', pageResponse.data.error);
+                } else if (pageResponse.data) {
                 const page = pageResponse.data;
                 const pageData = {
                   id: page.id,
@@ -1001,10 +1010,17 @@ module.exports = async function handler(req, res) {
                     console.error(`Error fetching Instagram account:`, instagramError.message);
                   }
                 }
+                }
+              } catch (pageError) {
+                console.error(`Error fetching Facebook page:`, {
+                  message: pageError.message,
+                  status: pageError.response?.status,
+                  data: pageError.response?.data
+                });
               }
             }
           } catch (pageError) {
-            console.error(`Error fetching Facebook page:`, pageError.message);
+            console.error(`Error in Facebook page fetching:`, pageError.message);
           }
         }
 
