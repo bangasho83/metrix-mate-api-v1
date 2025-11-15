@@ -2,7 +2,7 @@
  * @fileoverview Social API endpoint to fetch Facebook and Instagram page details and posts
  */
 
-const { getFacebookPosts, getInstagramPostsCount, getFacebookFollowers, getInstagramFollowers } = require('../services/meta-social-service.js');
+const { getFacebookPosts, getInstagramPostsCount, getInstagramFollowers } = require('../services/meta-social-service.js');
 const { getBrandInfo, getBrandConnection } = require('../services/firebase-service.js');
 const crypto = require('crypto');
 const axios = require('axios');
@@ -366,9 +366,7 @@ module.exports = async function handler(req, res) {
     if (fbPageIdToUse) {
       promises.push(getFacebookPosts(fbPageIdToUse, from, to, 25, null, { accessToken: facebookAccessToken }));
       promiseMap.facebookPosts = promises.length - 1;
-
-      promises.push(getFacebookFollowers(fbPageIdToUse, { accessToken: facebookAccessToken }));
-      promiseMap.facebookFollowers = promises.length - 1;
+      // Note: Facebook followers count is not available via OAuth (Meta restriction as of 2024)
     }
 
     // Instagram data
@@ -398,11 +396,9 @@ module.exports = async function handler(req, res) {
     // Process Facebook results
     if (fbPageIdToUse) {
       const facebookPostsResult = results[promiseMap.facebookPosts];
-      const facebookFollowersResult = results[promiseMap.facebookFollowers];
 
       response.facebook = {
         pageId: fbPageIdToUse,
-        followers: facebookFollowersResult.status === 'fulfilled' ? facebookFollowersResult.value : 0,
         posts: {
           count: 0,
           details: []
@@ -413,10 +409,6 @@ module.exports = async function handler(req, res) {
         response.facebook.posts = facebookPostsResult.value;
       } else {
         console.error('Facebook posts error:', facebookPostsResult.reason);
-      }
-
-      if (facebookFollowersResult.status === 'rejected') {
-        console.error('Facebook followers error:', facebookFollowersResult.reason);
       }
     }
 
@@ -492,7 +484,6 @@ module.exports = async function handler(req, res) {
     console.log('Social API - Response Summary:', {
       metaAccountId,
       facebookPosts: response.facebook?.posts?.count || 0,
-      facebookFollowers: response.facebook?.followers || 0,
       instagramPosts: response.instagram?.posts?.count || 0,
       instagramFollowers: response.instagram?.followers || 0,
       dateRange: { from, to },

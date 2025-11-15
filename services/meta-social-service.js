@@ -696,57 +696,10 @@ exports.getInstagramPostsCount = async function(instagramId, from, to, limit = 2
 };
 
 /**
- * Gets the followers count for a Facebook page
- * @param {string} pageId - Facebook page ID
- * @returns {Promise<number>} Followers count
+ * NOTE: Facebook followers count is NOT available via OAuth as of 2024
+ * Meta restricted access to fan_count and page_fans metrics to system user tokens only.
+ * This function has been removed. Use Instagram followers instead if available.
  */
-exports.getFacebookFollowers = async function(pageId, options = {}) {
-  try {
-    const { accessToken } = options;
-    const pageAccessToken = accessToken;
-
-    if (!pageAccessToken) {
-      throw new Error('Facebook access token is required for getFacebookFollowers (no META_ACCESS_TOKEN fallback)');
-    }
-
-    // Try using the insights endpoint first (more reliable)
-    try {
-      const insightsResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/insights`, {
-        params: {
-          access_token: pageAccessToken,
-          metric: 'page_fans'
-        }
-      });
-
-      if (insightsResponse.data?.data?.[0]?.value) {
-        console.log(`Facebook followers fetched via insights: ${insightsResponse.data.data[0].value}`);
-        return insightsResponse.data.data[0].value || 0;
-      }
-    } catch (insightsError) {
-      console.log(`Insights endpoint failed for page followers, trying direct field: ${insightsError.message}`);
-    }
-
-    // Fallback to direct field query
-    const response = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}`, {
-      params: {
-        access_token: pageAccessToken,
-        fields: 'fan_count'
-      }
-    });
-
-    // Facebook pages use fan_count (page likes), not followers_count
-    return response.data.fan_count || 0;
-  } catch (error) {
-    console.error('Error fetching Facebook followers:', {
-      message: error.message,
-      status: error.response?.status,
-      errorCode: error.response?.data?.error?.code,
-      errorMessage: error.response?.data?.error?.message,
-      pageId
-    });
-    return 0;
-  }
-};
 
 /**
  * Gets the followers count for an Instagram business account
