@@ -709,6 +709,24 @@ exports.getFacebookFollowers = async function(pageId, options = {}) {
       throw new Error('Facebook access token is required for getFacebookFollowers (no META_ACCESS_TOKEN fallback)');
     }
 
+    // Try using the insights endpoint first (more reliable)
+    try {
+      const insightsResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/insights`, {
+        params: {
+          access_token: pageAccessToken,
+          metric: 'page_fans'
+        }
+      });
+
+      if (insightsResponse.data?.data?.[0]?.value) {
+        console.log(`Facebook followers fetched via insights: ${insightsResponse.data.data[0].value}`);
+        return insightsResponse.data.data[0].value || 0;
+      }
+    } catch (insightsError) {
+      console.log(`Insights endpoint failed for page followers, trying direct field: ${insightsError.message}`);
+    }
+
+    // Fallback to direct field query
     const response = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}`, {
       params: {
         access_token: pageAccessToken,
@@ -719,7 +737,13 @@ exports.getFacebookFollowers = async function(pageId, options = {}) {
     // Facebook pages use fan_count (page likes), not followers_count
     return response.data.fan_count || 0;
   } catch (error) {
-    console.error('Error fetching Facebook followers:', error.message);
+    console.error('Error fetching Facebook followers:', {
+      message: error.message,
+      status: error.response?.status,
+      errorCode: error.response?.data?.error?.code,
+      errorMessage: error.response?.data?.error?.message,
+      pageId
+    });
     return 0;
   }
 };
