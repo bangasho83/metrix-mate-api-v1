@@ -1,0 +1,9 @@
+image-gen=25
+site-audit=300
+html-scraper=10
+keyword-sim=100
+meta-ad-sim=50
+image-prompt=10
+calendar-sim=200
+keyword-research=5
+mates-take/overview=5

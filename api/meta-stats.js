@@ -5,7 +5,7 @@
 const axios = require('axios');
 const { getFacebookPosts, getInstagramPosts, getFacebookPostsCount, getInstagramPostsCount } = require('../services/meta-social-service');
 const { getDefaultDateRange } = require('../utils/date-utils');
-const { getBrandInfo } = require('../services/firebase-service');
+const { getBrandInfo, getBrandConnection } = require('../services/firebase-service');
 
 const META_API_VERSION = 'v19.0';
 const META_BASE_URL = 'https://graph.facebook.com';
@@ -756,9 +756,9 @@ module.exports = async function handler(req, res) {
     // Get query parameters
     const { brandId, metaAccountId, pageId, instagramId, fbPageId, instaPageId, from, to, debug } = req.query;
 
-    // Normalize empty string and "not-set" values to null
+    // Normalize empty string and "not-set" values to null, also filter out invalid '0'
     const normalizeParam = (param) => {
-      if (!param || param === '' || param === 'not-set') {
+      if (!param || param === '' || param === 'not-set' || param === '0') {
         return null;
       }
       return param;
@@ -774,51 +774,46 @@ module.exports = async function handler(req, res) {
 
     if (brandId) {
       try {
-        const brand = await getBrandInfo(brandId);
-        const connections = brand?.connections || {};
-        if (brand) {
-          if (connections.facebook_page) {
-            facebookAccessToken = connections.facebook_page.access_token;
-            fbPageIdToUse = fbPageIdToUse || connections.facebook_page.page_id;
-            console.log('Facebook page connection found:', {
-              hasToken: !!facebookAccessToken,
-              pageId: connections.facebook_page.page_id,
-              allFields: Object.keys(connections.facebook_page)
-            });
-          }
-          if (connections.instagram_page) {
-            instagramAccessToken = connections.instagram_page.access_token;
-            instaPageIdToUse = instaPageIdToUse || connections.instagram_page.account_id;
-            console.log('Instagram page connection found:', {
-              hasToken: !!instagramAccessToken,
-              accountId: connections.instagram_page.account_id,
-              allFields: Object.keys(connections.instagram_page)
-            });
-          }
-          if (connections.meta_ads) {
-            metaAdsAccessToken = connections.meta_ads.access_token;
-            metaAccountIdToUse = metaAccountIdToUse || connections.meta_ads.ad_account_id;
-          }
-          console.log('Meta Stats API - Using OAuth tokens from brand:', {
-            brandId,
-            hasFacebookToken: !!facebookAccessToken,
-            hasInstagramToken: !!instagramAccessToken,
-            hasMetaAdsToken: !!metaAdsAccessToken,
-            fbPageIdToUse,
-            instaPageIdToUse,
-            metaAccountIdToUse
+        // Use centralized utility to extract connections
+        const fbConnection = await getBrandConnection(brandId, 'facebook_page');
+        const igConnection = await getBrandConnection(brandId, 'instagram_page');
+        const metaConnection = await getBrandConnection(brandId, 'meta_ads');
+
+        if (fbConnection) {
+          facebookAccessToken = fbConnection.access_token;
+          fbPageIdToUse = fbPageIdToUse || fbConnection.page_id;
+          console.log('Facebook page connection found:', {
+            hasToken: !!facebookAccessToken,
+            pageId: fbConnection.page_id
           });
         }
+        if (igConnection) {
+          instagramAccessToken = igConnection.access_token;
+          instaPageIdToUse = instaPageIdToUse || igConnection.account_id;
+          console.log('Instagram page connection found:', {
+            hasToken: !!instagramAccessToken,
+            accountId: igConnection.account_id
+          });
+        }
+        if (metaConnection) {
+          metaAdsAccessToken = metaConnection.access_token;
+          metaAccountIdToUse = metaAccountIdToUse || metaConnection.ad_account_id;
+        }
+        console.log('Meta Stats API - Using OAuth tokens from brand:', {
+          brandId,
+          hasFacebookToken: !!facebookAccessToken,
+          hasInstagramToken: !!instagramAccessToken,
+          hasMetaAdsToken: !!metaAdsAccessToken,
+          fbPageIdToUse,
+          instaPageIdToUse,
+          metaAccountIdToUse
+        });
       } catch (brandError) {
-        console.error('Error fetching brand info:', brandError.message);
+        console.error('Error fetching brand connections:', brandError.message);
       }
     }
 
-    // Fall back to environment variables if no OAuth tokens
-    const defaultMetaToken = process.env.META_ACCESS_TOKEN;
-    facebookAccessToken = facebookAccessToken || defaultMetaToken;
-    instagramAccessToken = instagramAccessToken || defaultMetaToken;
-    metaAdsAccessToken = metaAdsAccessToken || defaultMetaToken;
+    // OAuth tokens are required from brand connections (no environment fallback)
 
     // Get date range
     const { fromDate: originalFromDate, toDate: originalToDate } = getDefaultDateRange(from, to);
@@ -903,7 +898,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // 2. Get pages - use brand connections if available, otherwise try /me/accounts
+    // 2. Get pages and Instagram data from brand connections
     try {
       // Check cache first for pages - include brandId in cache key for brand-specific data
       const pagesCacheKey = brandId ? `pages_data_${brandId}` : 'pages_data';
@@ -912,98 +907,57 @@ module.exports = async function handler(req, res) {
         response.pages = API_CACHE.data[pagesCacheKey].pages;
         response.instagram = API_CACHE.data[pagesCacheKey].instagram;
       } else {
-        console.log('Fetching pages...');
+        console.log('Fetching pages and Instagram data from brand connections...');
 
-        // If we have a Facebook access token, try to get the page info
-        if (facebookAccessToken) {
+        // Fetch Facebook page if we have page ID and token
+        if (fbPageIdToUse && facebookAccessToken) {
           try {
-            // Use the page ID from brand connections if available
-            let pageIdToFetch = fbPageIdToUse;
-
-            // Now fetch the page details
-            if (pageIdToFetch) {
-              console.log(`Fetching Facebook page ${pageIdToFetch} from brand connections`);
-
-              try {
-                const pageResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageIdToFetch}`, {
-                  params: {
-                    access_token: facebookAccessToken,
-                    fields: 'id,name,followers_count,fan_count,talking_about_count,link,verification_status,picture,instagram_business_account'
-                  }
-                });
-
-                if (pageResponse.data && pageResponse.data.error) {
-                  console.error('Facebook API error fetching page:', pageResponse.data.error);
-                } else if (pageResponse.data) {
-                const page = pageResponse.data;
-                const pageData = {
-                  id: page.id,
-                  name: page.name,
-                  followers: page.followers_count || 0,
-                  likes: page.fan_count || 0,
-                  talking_about: page.talking_about_count || 0,
-                  link: page.link,
-                  verified: page.verification_status === 'blue_verified',
-                  picture: page.picture?.data?.url,
-                  instagram_business_account: page.instagram_business_account?.id || null,
-                  access_token: facebookAccessToken // Use the token from brand
-                };
-
-                response.pages.push(pageData);
-                console.log(`Successfully fetched Facebook page: ${page.name}`);
-
-                // If this page has an Instagram business account, fetch its details
-                if (page.instagram_business_account && page.instagram_business_account.id) {
-                  try {
-                    const instagramId = page.instagram_business_account.id;
-                    console.log(`Fetching Instagram account ${instagramId} linked to Facebook page`);
-
-                    const instagramResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${instagramId}`, {
-                      params: {
-                        access_token: instagramAccessToken || facebookAccessToken,
-                        fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count,website,biography'
-                      }
-                    });
-
-                    const instagramData = {
-                      id: instagramResponse.data.id,
-                      username: instagramResponse.data.username,
-                      name: instagramResponse.data.name,
-                      picture: instagramResponse.data.profile_picture_url,
-                      followers: instagramResponse.data.followers_count || 0,
-                      following: instagramResponse.data.follows_count || 0,
-                      media_count: instagramResponse.data.media_count || 0,
-                      website: instagramResponse.data.website,
-                      biography: instagramResponse.data.biography,
-                      linked_page_id: page.id,
-                      linked_page_name: page.name
-                    };
-
-                    response.instagram.push(instagramData);
-                    console.log(`Successfully fetched Instagram account: ${instagramResponse.data.username}`);
-                  } catch (instagramError) {
-                    console.error(`Error fetching Instagram account:`, instagramError.message);
-                  }
-                }
-                }
-              } catch (pageError) {
-                console.error(`Error fetching Facebook page:`, {
-                  message: pageError.message,
-                  status: pageError.response?.status,
-                  data: pageError.response?.data
-                });
+            console.log(`Fetching Facebook page ${fbPageIdToUse}`, {
+              hasToken: !!facebookAccessToken,
+              tokenLength: facebookAccessToken?.length || 0,
+              tokenStart: facebookAccessToken?.substring(0, 10) || 'N/A'
+            });
+            const pageResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${fbPageIdToUse}`, {
+              params: {
+                access_token: facebookAccessToken,
+                fields: 'id,name,fan_count,link,picture,instagram_business_account'
               }
+            });
+
+            if (pageResponse.data && !pageResponse.data.error) {
+              const page = pageResponse.data;
+              const pageData = {
+                id: page.id,
+                name: page.name,
+                followers: 0, // followers_count requires pages_read_engagement permission
+                likes: page.fan_count || 0,
+                talking_about: 0, // talking_about_count requires pages_read_engagement permission
+                link: page.link,
+                verified: false, // verification_status requires pages_read_engagement permission
+                picture: page.picture?.data?.url,
+                instagram_business_account: page.instagram_business_account?.id || null,
+                access_token: facebookAccessToken
+              };
+              response.pages.push(pageData);
+              console.log(`Successfully fetched Facebook page: ${page.name}`);
+            } else if (pageResponse.data?.error) {
+              console.error('Facebook API error:', pageResponse.data.error);
             }
           } catch (pageError) {
-            console.error(`Error in Facebook page fetching:`, pageError.message);
+            console.error(`Error fetching Facebook page ${fbPageIdToUse}:`, pageError.message);
+            if (pageError.response?.data) {
+              console.error('Facebook API error details:', JSON.stringify(pageError.response.data, null, 2));
+            }
+            if (pageError.response?.status) {
+              console.error('HTTP Status:', pageError.response.status);
+            }
           }
         }
 
-        // If we have an Instagram page ID from brand connections, fetch that directly
-        if (instaPageIdToUse && instagramAccessToken && response.instagram.length === 0) {
+        // Fetch Instagram account if we have account ID and token
+        if (instaPageIdToUse && instagramAccessToken) {
           try {
-            console.log(`Fetching Instagram account ${instaPageIdToUse} directly from brand connections`);
-
+            console.log(`Fetching Instagram account ${instaPageIdToUse}`);
             const instagramResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${instaPageIdToUse}`, {
               params: {
                 access_token: instagramAccessToken,
@@ -1011,24 +965,33 @@ module.exports = async function handler(req, res) {
               }
             });
 
-            const instagramData = {
-              id: instagramResponse.data.id,
-              username: instagramResponse.data.username,
-              name: instagramResponse.data.name,
-              picture: instagramResponse.data.profile_picture_url,
-              followers: instagramResponse.data.followers_count || 0,
-              following: instagramResponse.data.follows_count || 0,
-              media_count: instagramResponse.data.media_count || 0,
-              website: instagramResponse.data.website,
-              biography: instagramResponse.data.biography,
-              linked_page_id: null,
-              linked_page_name: null
-            };
-
-            response.instagram.push(instagramData);
-            console.log(`Successfully fetched Instagram account: ${instagramResponse.data.username}`);
+            if (instagramResponse.data && !instagramResponse.data.error) {
+              const instagramData = {
+                id: instagramResponse.data.id,
+                username: instagramResponse.data.username,
+                name: instagramResponse.data.name,
+                picture: instagramResponse.data.profile_picture_url,
+                followers: instagramResponse.data.followers_count || 0,
+                following: instagramResponse.data.follows_count || 0,
+                media_count: instagramResponse.data.media_count || 0,
+                website: instagramResponse.data.website,
+                biography: instagramResponse.data.biography,
+                linked_page_id: fbPageIdToUse || null,
+                linked_page_name: response.pages[0]?.name || null
+              };
+              response.instagram.push(instagramData);
+              console.log(`Successfully fetched Instagram account: ${instagramResponse.data.username}`);
+            } else if (instagramResponse.data?.error) {
+              console.error('Instagram API error:', instagramResponse.data.error);
+            }
           } catch (instagramError) {
             console.error(`Error fetching Instagram account ${instaPageIdToUse}:`, instagramError.message);
+            if (instagramError.response?.data) {
+              console.error('Instagram API error details:', JSON.stringify(instagramError.response.data, null, 2));
+            }
+            if (instagramError.response?.status) {
+              console.error('HTTP Status:', instagramError.response.status);
+            }
           }
         }
 
@@ -1045,18 +1008,8 @@ module.exports = async function handler(req, res) {
       response.error = `Pages error: ${pagesError.message}`;
     }
     
-    // Apply filters if needed
-    if (fbPageIdToUse && response.pages.length > 0) {
-      const fbPageIds = fbPageIdToUse.split(',');
-      response.pages = response.pages.filter(page => fbPageIds.includes(page.id));
-    }
-
-    if (instaPageIdToUse && response.instagram.length > 0) {
-      const instaPageIds = instaPageIdToUse.split(',');
-      response.instagram = response.instagram.filter(ig => instaPageIds.includes(ig.id));
-    }
-
-    // For backward compatibility
+    // Apply filters if needed - only filter if explicitly requested via query params
+    // Don't filter when using brand connections (brandId) as we want to return all connected pages
     if (pageId && response.pages.length > 0) {
       response.pages = response.pages.filter(page => page.id === pageId);
     }
@@ -1079,10 +1032,6 @@ module.exports = async function handler(req, res) {
           try {
             console.log(`Fetching posts for Facebook page ${page.id}`);
 
-            // Temporarily set the access token in environment for the function to use
-            const originalToken = process.env.META_ACCESS_TOKEN;
-            process.env.META_ACCESS_TOKEN = facebookAccessToken;
-
             try {
               // Use the same function as summary-stats.js
               const fbPostsResult = await getFacebookPostsCount(
@@ -1090,7 +1039,8 @@ module.exports = async function handler(req, res) {
                 dateRange.from,
                 dateRange.to,
                 25, // Limit to 25 posts
-                response.account?.timezone // Pass business timezone from account
+                response.account?.timezone, // Pass business timezone from account
+                { accessToken: facebookAccessToken } // Pass OAuth token
               );
 
               console.log(`Successfully fetched ${fbPostsResult.count} Facebook posts, showing ${fbPostsResult.details.length}`);
@@ -1200,14 +1150,6 @@ module.exports = async function handler(req, res) {
               API_CACHE.data[fbPostsCacheKey] = response.posts.facebook;
               API_CACHE.timestamps[fbPostsCacheKey] = Date.now();
               console.log(`Cached ${response.posts.facebook.length} Facebook posts for page ${page.id}`);
-            } finally {
-              // Restore the original token
-              if (originalToken) {
-                process.env.META_ACCESS_TOKEN = originalToken;
-              } else {
-                delete process.env.META_ACCESS_TOKEN;
-              }
-            }
           } catch (postsError) {
             console.error(`Error fetching Facebook posts:`, postsError.message);
             console.error('Error details:', postsError.response?.data || 'No response data');
@@ -1419,7 +1361,7 @@ module.exports = async function handler(req, res) {
       console.log('\n=== DEBUG MODE: Testing Instagram Metrics ===');
       const testPost = response.posts.instagram[0]; // Test with the first post
       const linkedPage = response.pages.find(page => page.id === response.instagram[0]?.linked_page_id);
-      const pageToken = linkedPage?.access_token || process.env.META_ACCESS_TOKEN;
+      const pageToken = linkedPage?.access_token || instagramAccessToken;
       
       try {
         const testResults = await testInstagramMetrics(testPost.id, pageToken);
@@ -1455,9 +1397,9 @@ module.exports = async function handler(req, res) {
         )) {
       
       console.log('All Facebook post insights are zero, trying alternative approach');
-      
+
       // Try to fetch insights for each post individually
-      const pageToken = response.pages[0].access_token || process.env.META_ACCESS_TOKEN;
+      const pageToken = response.pages[0].access_token || facebookAccessToken;
       
       for (let i = 0; i < response.posts.facebook.length; i++) {
         const post = response.posts.facebook[i];
@@ -1505,32 +1447,37 @@ module.exports = async function handler(req, res) {
       available: {}
     };
 
-    // Check permissions for the main token
+    // Check permissions for the main token (use available OAuth tokens)
     try {
-      const mainTokenPermissions = await checkMetaPermissions(process.env.META_ACCESS_TOKEN);
-      
-      // Just include the permissions we have (where status is 'granted')
-      if (mainTokenPermissions.rawPermissions) {
-        const grantedPermissions = mainTokenPermissions.rawPermissions
-          .filter(p => p.status === 'granted')
-          .map(p => p.permission);
-        
-        response.permissions.available = grantedPermissions.reduce((acc, perm) => {
-          acc[perm] = true;
-          return acc;
-        }, {});
-        
-        console.log('Available permissions:', grantedPermissions);
+      const tokenToCheck = metaAdsAccessToken || facebookAccessToken || instagramAccessToken;
+      if (tokenToCheck) {
+        const mainTokenPermissions = await checkMetaPermissions(tokenToCheck);
+
+        // Just include the permissions we have (where status is 'granted')
+        if (mainTokenPermissions.rawPermissions) {
+          const grantedPermissions = mainTokenPermissions.rawPermissions
+            .filter(p => p.status === 'granted')
+            .map(p => p.permission);
+
+          response.permissions.available = grantedPermissions.reduce((acc, perm) => {
+            acc[perm] = true;
+            return acc;
+          }, {});
+
+          console.log('Available permissions:', grantedPermissions);
+        }
       }
-      
+
       // Also include token debug info
       try {
-        const tokenDebugResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/debug_token`, {
-          params: {
-            input_token: process.env.META_ACCESS_TOKEN,
-            access_token: process.env.META_ACCESS_TOKEN
-          }
-        });
+        const tokenToDebug = metaAdsAccessToken || facebookAccessToken || instagramAccessToken;
+        if (tokenToDebug) {
+          const tokenDebugResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/debug_token`, {
+            params: {
+              input_token: tokenToDebug,
+              access_token: tokenToDebug
+            }
+          });
         
         if (tokenDebugResponse.data && tokenDebugResponse.data.data) {
           response.permissions.tokenInfo = {
@@ -1611,9 +1558,9 @@ module.exports = async function handler(req, res) {
         try {
           // Extract video IDs
           const videoIds = videoPosts.map(post => post.video_id);
-          
+
           // Get page token
-          const pageToken = response.pages[0]?.access_token || process.env.META_ACCESS_TOKEN;
+          const pageToken = response.pages[0]?.access_token || facebookAccessToken;
           
           // Fetch video insights in batch
           const videoInsights = await fetchFacebookVideoInsightsBatch(videoIds, pageToken);
@@ -1645,10 +1592,10 @@ module.exports = async function handler(req, res) {
         try {
           // Extract media IDs (use post.id for Instagram, not video_id)
           const mediaIds = videoPosts.map(post => post.id);
-          
+
           // Get page token
           const linkedPage = response.pages.find(page => page.id === response.instagram[0]?.linked_page_id);
-          const pageToken = linkedPage?.access_token || process.env.META_ACCESS_TOKEN;
+          const pageToken = linkedPage?.access_token || instagramAccessToken;
           
           // Fetch video insights in batch
           const videoInsights = await fetchInstagramVideoInsightsBatch(mediaIds, pageToken);
@@ -1682,7 +1629,7 @@ module.exports = async function handler(req, res) {
         
         // Get page token
         const linkedPage = response.pages.find(page => page.id === response.instagram[0]?.linked_page_id);
-        const pageToken = linkedPage?.access_token || process.env.META_ACCESS_TOKEN;
+        const pageToken = linkedPage?.access_token || instagramAccessToken;
         
         // Process video views in smaller batches to avoid timeout
         const videoBatchSize = 3; // Process 3 video posts at a time

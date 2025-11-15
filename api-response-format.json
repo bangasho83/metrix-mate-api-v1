@@ -1,0 +1,69 @@
+{
+  "totals": {
+    "spend": 1234.56,
+    "impressions": 50000,
+    "clicks": 1500,
+    "reach": 25000,
+    "campaigns": [
+      {
+        "id": "123456789",
+        "name": "Summer Sale Campaign",
+        "objective": "OUTCOME_TRAFFIC",
+        "status": "ACTIVE",
+        "adSets": [
+          {
+            "id": "987654321",
+            "name": "Toronto Area Targeting",
+            "audience": {
+              "location": "Etobicoke, Central Etobicoke, Etobicoke North, Toronto, Mississauga",
+              "locations": ["Etobicoke", "Central Etobicoke", "Etobicoke North, Toronto", "Mississauga"],
+              "age_range": "25-45",
+              "gender": "all"
+            },
+            "placements": ["feed", "stories"],
+            "budget": 50.00,
+            "schedule": {
+              "start_date": "2023-06-01",
+              "end_date": "2023-06-30"
+            },
+            "ads": [
+              {
+                "id": "111222333",
+                "name": "Summer Sale - Image Ad",
+                "format": "image",
+                "media_url": "https://example.com/image.jpg",
+                "text": "Check out our summer sale!",
+                "headline": "Up to 50% Off",
+                "cta": "SHOP_NOW",
+                "destination": "https://example.com/sale",
+                "metrics": {
+                  "spend": 25.50,
+                  "clicks": 750,
+                  "impressions": 25000,
+                  "ctr": 3.0
+                }
+              }
+            ]
+          }
+        ],
+        "metrics": {
+          "spend": 150.75,
+          "impressions": 30000,
+          "clicks": 900,
+          "reach": 15000
+        }
+      }
+    ]
+  },
+  "dailyData": [
+    {
+      "date": "20230601",
+      "meta_ads": {
+        "spend": 50.25,
+        "impressions": 10000,
+        "clicks": 300,
+        "reach": 5000
+      }
+    }
+  ]
+}

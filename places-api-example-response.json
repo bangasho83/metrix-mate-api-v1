@@ -1,0 +1,163 @@
+{
+  "places": [
+    {
+      "id": "place_downtown_001",
+      "brandId": "brand_restaurant_chain",
+      "name": "Downtown Location",
+      "address": "123 Main St, Downtown, NY 10001",
+      "placeId": "ChIJN1t_tDeuEmsRUsoyG83frY4",
+      "rating": 4.5,
+      "reviewCount": 127,
+      "verified": true,
+      "phone": "+1-555-123-4567",
+      "website": "https://example-restaurants.com/downtown",
+      "coordinates": {
+        "lat": 40.7128,
+        "lng": -74.0060
+      },
+      "businessHours": {
+        "monday": "9:00 AM - 10:00 PM",
+        "tuesday": "9:00 AM - 10:00 PM",
+        "wednesday": "9:00 AM - 10:00 PM",
+        "thursday": "9:00 AM - 10:00 PM",
+        "friday": "9:00 AM - 11:00 PM",
+        "saturday": "10:00 AM - 11:00 PM",
+        "sunday": "10:00 AM - 9:00 PM"
+      },
+      "categories": ["restaurant", "american_cuisine", "casual_dining"],
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-20T14:45:00Z"
+    },
+    {
+      "id": "place_uptown_002",
+      "brandId": "brand_restaurant_chain",
+      "name": "Uptown Branch",
+      "address": "456 Broadway Ave, Uptown, NY 10025",
+      "placeId": "ChIJOwg_06VPwokRYv534QaPC8g",
+      "rating": 4.2,
+      "reviewCount": 89,
+      "verified": true,
+      "phone": "+1-555-234-5678",
+      "website": "https://example-restaurants.com/uptown",
+      "coordinates": {
+        "lat": 40.7831,
+        "lng": -73.9712
+      },
+      "businessHours": {
+        "monday": "8:00 AM - 9:00 PM",
+        "tuesday": "8:00 AM - 9:00 PM",
+        "wednesday": "8:00 AM - 9:00 PM",
+        "thursday": "8:00 AM - 9:00 PM",
+        "friday": "8:00 AM - 10:00 PM",
+        "saturday": "9:00 AM - 10:00 PM",
+        "sunday": "9:00 AM - 8:00 PM"
+      },
+      "categories": ["restaurant", "american_cuisine", "family_friendly"],
+      "createdAt": "2024-01-10T08:15:00Z",
+      "updatedAt": "2024-01-18T16:20:00Z"
+    },
+    {
+      "id": "place_brooklyn_003",
+      "brandId": "brand_restaurant_chain",
+      "name": "Brooklyn Heights",
+      "address": "789 Court St, Brooklyn, NY 11201",
+      "placeId": "ChIJd8BlQ2BZwokRAFUEcm_qrcA",
+      "rating": 4.7,
+      "reviewCount": 203,
+      "verified": true,
+      "phone": "+1-555-345-6789",
+      "website": "https://example-restaurants.com/brooklyn",
+      "coordinates": {
+        "lat": 40.6892,
+        "lng": -73.9942
+      },
+      "businessHours": {
+        "monday": "7:00 AM - 9:00 PM",
+        "tuesday": "7:00 AM - 9:00 PM",
+        "wednesday": "7:00 AM - 9:00 PM",
+        "thursday": "7:00 AM - 9:00 PM",
+        "friday": "7:00 AM - 10:00 PM",
+        "saturday": "8:00 AM - 10:00 PM",
+        "sunday": "8:00 AM - 8:00 PM"
+      },
+      "categories": ["restaurant", "american_cuisine", "brunch"],
+      "createdAt": "2024-01-05T12:00:00Z",
+      "updatedAt": "2024-01-22T09:30:00Z"
+    },
+    {
+      "id": "place_queens_004",
+      "brandId": "brand_restaurant_chain",
+      "name": "Queens Plaza",
+      "address": "321 Northern Blvd, Queens, NY 11101",
+      "placeId": "ChIJb9IuIXBQwokR5MnKzqbEztE",
+      "rating": 4.1,
+      "reviewCount": 76,
+      "verified": false,
+      "phone": "+1-555-456-7890",
+      "website": "https://example-restaurants.com/queens",
+      "coordinates": {
+        "lat": 40.7505,
+        "lng": -73.9934
+      },
+      "businessHours": {
+        "monday": "9:00 AM - 8:00 PM",
+        "tuesday": "9:00 AM - 8:00 PM",
+        "wednesday": "9:00 AM - 8:00 PM",
+        "thursday": "9:00 AM - 8:00 PM",
+        "friday": "9:00 AM - 9:00 PM",
+        "saturday": "10:00 AM - 9:00 PM",
+        "sunday": "10:00 AM - 7:00 PM"
+      },
+      "categories": ["restaurant", "american_cuisine", "takeout"],
+      "createdAt": "2024-01-20T15:45:00Z",
+      "updatedAt": "2024-01-20T15:45:00Z"
+    },
+    {
+      "id": "place_bronx_005",
+      "brandId": "brand_restaurant_chain",
+      "name": "Bronx Central",
+      "address": "654 Grand Concourse, Bronx, NY 10451",
+      "placeId": "ChIJKxjxuaNHwokRMDA5EqiMOOg",
+      "rating": 3.9,
+      "reviewCount": 47,
+      "verified": true,
+      "phone": "+1-555-567-8901",
+      "website": "https://example-restaurants.com/bronx",
+      "coordinates": {
+        "lat": 40.8176,
+        "lng": -73.9482
+      },
+      "businessHours": {
+        "monday": "10:00 AM - 8:00 PM",
+        "tuesday": "10:00 AM - 8:00 PM",
+        "wednesday": "10:00 AM - 8:00 PM",
+        "thursday": "10:00 AM - 8:00 PM",
+        "friday": "10:00 AM - 9:00 PM",
+        "saturday": "11:00 AM - 9:00 PM",
+        "sunday": "11:00 AM - 7:00 PM"
+      },
+      "categories": ["restaurant", "american_cuisine", "delivery"],
+      "createdAt": "2024-01-12T11:20:00Z",
+      "updatedAt": "2024-01-19T13:15:00Z"
+    }
+  ],
+  "brand": {
+    "id": "brand_restaurant_chain",
+    "name": "Example Restaurant Chain",
+    "organizationId": "org_food_group_789",
+    "description": "A popular American restaurant chain serving quality food across New York City",
+    "website": "https://example-restaurants.com",
+    "logo": "https://example-restaurants.com/logo.png",
+    "industry": "Food & Beverage",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-15T10:00:00Z"
+  },
+  "totals": {
+    "count": 5,
+    "verified": 4,
+    "unverified": 1,
+    "averageRating": 4.28,
+    "totalReviews": 542
+  },
+  "success": true
+}

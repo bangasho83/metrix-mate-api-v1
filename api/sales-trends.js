@@ -5,7 +5,7 @@
 
 const { getTossdownProductTrends } = require('../services/tossdown-service');
 const { getDefaultDateRange } = require('../utils/date-utils');
-const { getBrandInfo } = require('../services/firebase-service');
+const { getBrandConnection } = require('../services/firebase-service');
 
 // Default response for error cases
 const DEFAULT_RESPONSE = {
@@ -35,30 +35,39 @@ module.exports = async function handler(req, res) {
 
     console.log('Sales Trends API request:', { source, from, to, tossdownId, brandId });
 
+    // Normalize empty string and "not-set" values to null, also filter out invalid '0'
+    const normalizeParam = (param) => {
+      if (!param || param === '' || param === 'not-set' || param === '0') {
+        return null;
+      }
+      return param;
+    };
+
     // Auto-detect source from brand connections if brandId is provided
     let sourceToUse = source;
-    let tossdownIdToUse = tossdownId;
+    let tossdownIdToUse = normalizeParam(tossdownId);
 
     if (brandId) {
       try {
-        const brand = await getBrandInfo(brandId);
-        const connections = brand?.connections || {};
+        // Use centralized utility to extract Tossdown connection
+        const tossdownConnection = await getBrandConnection(brandId, 'tossdown');
+
         console.log('Sales Trends API - Brand fetched:', {
           brandId,
-          hasTossdown: !!connections.tossdown
+          hasTossdown: !!tossdownConnection
         });
 
         // If no source specified, auto-detect from brand connections
         if (!sourceToUse) {
-          if (connections.tossdown && connections.tossdown.tossdown_id) {
+          if (tossdownConnection && tossdownConnection.tossdown_id) {
             sourceToUse = 'tossdown';
             console.log('Sales Trends API - Auto-detected source: tossdown');
           }
         }
 
         // Extract connection data based on source
-        if (sourceToUse === 'tossdown' && connections.tossdown && connections.tossdown.tossdown_id) {
-          tossdownIdToUse = connections.tossdown.tossdown_id;
+        if (sourceToUse === 'tossdown' && tossdownConnection && tossdownConnection.tossdown_id) {
+          tossdownIdToUse = tossdownConnection.tossdown_id;
           console.log('Sales Trends API - Using tossdown_id from brand:', { brandId, tossdownIdToUse });
         }
       } catch (brandError) {

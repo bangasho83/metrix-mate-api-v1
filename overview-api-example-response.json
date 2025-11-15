@@ -1,0 +1,189 @@
+{
+  "totals": {
+    "visitors": {
+      "total": 518,
+      "organic_search": 135,
+      "paid_search": 0,
+      "organic_social": 36,
+      "paid_social": 0,
+      "direct": 93,
+      "email": 0,
+      "affiliate": 0,
+      "display": 0,
+      "video": 0,
+      "referral": 254,
+      "sessions": 586,
+      "engagedSessions": 512,
+      "bounceRate": 12.63,
+      "engagementRate": 87.37
+    },
+    "meta_ads": {
+      "spend": 236.00,
+      "impressions": 51484,
+      "clicks": 531,
+      "reach": 45068,
+      "ctr": 1.03,
+      "cpc": 0.44,
+      "cpm": 4.58
+    },
+    "sales": {
+      "revenue": 266.08,
+      "transactions": 20,
+      "averageOrderValue": 13.30
+    }
+  },
+  "dailyData": [
+    {
+      "date": "20240101",
+      "visitors": {
+        "total": 170,
+        "organic_search": 35,
+        "paid_search": 0,
+        "organic_social": 9,
+        "paid_social": 0,
+        "direct": 28,
+        "email": 0,
+        "affiliate": 0,
+        "display": 0,
+        "video": 0,
+        "referral": 98,
+        "sessions": 186,
+        "engagedSessions": 164,
+        "bounceRate": 11.83,
+        "engagementRate": 88.17,
+        "medium_source_details": {
+          "referral": {
+            "meta": 90,
+            "(not set)": 3,
+            "ridgewayplazaeats.com": 3,
+            "metrixmate5.vercel.app": 1
+          },
+          "organic_search": {
+            "google": 35
+          },
+          "direct": {
+            "(direct)": 28
+          },
+          "organic_social": {
+            "l.instagram.com": 8,
+            "apps.facebook.com": 1
+          }
+        }
+      },
+      "meta_ads": {
+        "spend": 78.52,
+        "impressions": 17358,
+        "clicks": 174,
+        "reach": 15034,
+        "ctr": 1.00,
+        "cpc": 0.45,
+        "cpm": 4.52
+      },
+      "sales": {
+        "revenue": 51.96,
+        "transactions": 4,
+        "averageOrderValue": 12.99
+      }
+    },
+    {
+      "date": "20240102",
+      "visitors": {
+        "total": 145,
+        "organic_search": 42,
+        "paid_search": 0,
+        "organic_social": 12,
+        "paid_social": 0,
+        "direct": 24,
+        "email": 0,
+        "affiliate": 0,
+        "display": 0,
+        "video": 0,
+        "referral": 67,
+        "sessions": 158,
+        "engagedSessions": 142,
+        "bounceRate": 10.13,
+        "engagementRate": 89.87,
+        "medium_source_details": {
+          "referral": {
+            "meta": 60,
+            "other-site.com": 7
+          },
+          "organic_search": {
+            "google": 42
+          },
+          "direct": {
+            "(direct)": 24
+          },
+          "organic_social": {
+            "l.instagram.com": 12
+          }
+        }
+      },
+      "meta_ads": {
+        "spend": 65.30,
+        "impressions": 14250,
+        "clicks": 156,
+        "reach": 12800,
+        "ctr": 1.09,
+        "cpc": 0.42,
+        "cpm": 4.58
+      },
+      "sales": {
+        "revenue": 89.45,
+        "transactions": 7,
+        "averageOrderValue": 12.78
+      }
+    },
+    {
+      "date": "20240103",
+      "visitors": {
+        "total": 203,
+        "organic_search": 58,
+        "paid_search": 0,
+        "organic_social": 15,
+        "paid_social": 0,
+        "direct": 41,
+        "email": 0,
+        "affiliate": 0,
+        "display": 0,
+        "video": 0,
+        "referral": 89,
+        "sessions": 242,
+        "engagedSessions": 206,
+        "bounceRate": 14.88,
+        "engagementRate": 85.12,
+        "medium_source_details": {
+          "referral": {
+            "meta": 84,
+            "partner-site.com": 5
+          },
+          "organic_search": {
+            "google": 56,
+            "bing": 2
+          },
+          "direct": {
+            "(direct)": 41
+          },
+          "organic_social": {
+            "l.instagram.com": 10,
+            "facebook.com": 5
+          }
+        }
+      },
+      "meta_ads": {
+        "spend": 92.18,
+        "impressions": 19876,
+        "clicks": 201,
+        "reach": 17234,
+        "ctr": 1.01,
+        "cpc": 0.46,
+        "cpm": 4.64
+      },
+      "sales": {
+        "revenue": 124.67,
+        "transactions": 9,
+        "averageOrderValue": 13.85
+      }
+    }
+  ]
+}

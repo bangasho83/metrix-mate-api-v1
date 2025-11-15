@@ -8,7 +8,7 @@ const { getGa4SalesData } = require('../services/ga4-service');
 const { getTossdownSalesData, getTossdownSalesDataAlt } = require('../services/tossdown-service');
 const { validateEnvironment } = require('../utils/environment');
 const { getDefaultDateRange } = require('../utils/date-utils');
-const { getBrandInfo } = require('../services/firebase-service');
+const { getBrandConnection } = require('../services/firebase-service');
 
 
 // Allow longer execution for slower upstreams (e.g., Tossdown)
@@ -46,43 +46,53 @@ module.exports = async function handler(req, res) {
 
     console.log('Sales API request:', { source, from, to, locationId, tossdownId, brandId, raw });
 
+    // Normalize empty string and "not-set" values to null, also filter out invalid '0'
+    const normalizeParam = (param) => {
+      if (!param || param === '' || param === 'not-set' || param === '0') {
+        return null;
+      }
+      return param;
+    };
+
     // Get brand info if brandId is provided
     let brand = null;
     let sourceToUse = source;
-    let tossdownIdToUse = tossdownId;
+    let tossdownIdToUse = normalizeParam(tossdownId);
     let ga4PropertyIdToUse = null;
     let ga4TokenToUse = null;
 
     if (brandId) {
       try {
-        brand = await getBrandInfo(brandId);
-        const connections = brand?.connections || {};
+        // Use centralized utility to extract connections
+        const tossdownConnection = await getBrandConnection(brandId, 'tossdown');
+        const ga4Connection = await getBrandConnection(brandId, 'ga4');
+
         console.log('Sales API - Brand fetched:', {
           brandId,
-          hasTossdown: !!connections.tossdown,
-          hasGa4: !!connections.ga4
+          hasTossdown: !!tossdownConnection,
+          hasGa4: !!ga4Connection
         });
 
         // If no source specified, auto-detect from brand connections
         if (!sourceToUse) {
-          if (connections.tossdown && connections.tossdown.tossdown_id) {
+          if (tossdownConnection && tossdownConnection.tossdown_id) {
             sourceToUse = 'tossdown';
             console.log('Sales API - Auto-detected source: tossdown');
-          } else if (connections.ga4 && connections.ga4.property_id) {
+          } else if (ga4Connection && ga4Connection.property_id) {
             sourceToUse = 'ga4';
             console.log('Sales API - Auto-detected source: ga4');
           }
         }
 
         // Extract connection data based on source
-        if (sourceToUse === 'tossdown' && connections.tossdown && connections.tossdown.tossdown_id) {
-          tossdownIdToUse = connections.tossdown.tossdown_id;
+        if (sourceToUse === 'tossdown' && tossdownConnection && tossdownConnection.tossdown_id) {
+          tossdownIdToUse = tossdownConnection.tossdown_id;
           console.log('Sales API - Using tossdown_id from brand:', { brandId, tossdownIdToUse });
         }
 
-        if (sourceToUse === 'ga4' && connections.ga4) {
-          ga4PropertyIdToUse = connections.ga4.property_id;
-          ga4TokenToUse = connections.ga4.access_token;
+        if (sourceToUse === 'ga4' && ga4Connection) {
+          ga4PropertyIdToUse = ga4Connection.property_id;
+          ga4TokenToUse = ga4Connection.access_token;
           console.log('Sales API - Using GA4 from brand:', { brandId, ga4PropertyIdToUse, hasToken: !!ga4TokenToUse });
         }
       } catch (brandError) {
