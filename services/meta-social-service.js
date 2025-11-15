@@ -408,7 +408,8 @@ exports.getFacebookPosts = async function(pageId, from, to, limit = 25, business
     };
     
     // Use Promise.all to fetch from multiple endpoints in parallel
-    const [postsResponse, feedResponse, insightsResponse, publishedResponse] = await Promise.allSettled([
+    // Note: Insights and visitor_posts endpoints are blocked by OAuth restrictions (Meta 2024)
+    const [postsResponse, feedResponse, publishedResponse] = await Promise.allSettled([
       // 1. Posts edge
       axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}`, {
         params: {
@@ -428,23 +429,7 @@ exports.getFacebookPosts = async function(pageId, from, to, limit = 25, business
         }
       }),
 
-      // 3. Insights endpoint - for page-level metrics
-      axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/insights`, {
-        params: {
-          access_token: pageAccessToken,
-          metric: 'page_impressions,page_engaged_users',
-          since,
-          until,
-          period: 'day'
-        }
-      }).catch(error => {
-        // Log the error but don't throw it
-        console.log(`Insights endpoint not available for page ${pageId}: ${error.message}`);
-        // Return a mock response that won't cause issues
-        return { data: { data: [] } };
-      }),
-
-      // 4. Published posts endpoint
+      // 3. Published posts endpoint
       axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/published_posts`, {
         params: {
           access_token: pageAccessToken,
@@ -460,65 +445,34 @@ exports.getFacebookPosts = async function(pageId, from, to, limit = 25, business
     if (postsResponse.status === 'fulfilled' && postsResponse.value.data?.posts?.data) {
       const posts = postsResponse.value.data.posts.data;
       console.log(`Found ${posts.length} posts using posts edge`);
-      
+
       posts.forEach(post => {
         if (processPost(post, 'posts edge')) uniquePostsCount++;
       });
     }
-    
+
     // Process feed endpoint
     if (feedResponse.status === 'fulfilled' && feedResponse.value.data?.data) {
       const feed = feedResponse.value.data.data;
       console.log(`Found ${feed.length} posts using feed endpoint`);
-      
+
       feed.forEach(post => {
         if (processPost(post, 'feed endpoint')) uniquePostsCount++;
       });
     }
-    
-    // Process insights endpoint - only if successful
-    if (insightsResponse.status === 'fulfilled' && insightsResponse.value.data?.data) {
-      const insights = insightsResponse.value.data.data;
-      console.log(`Found ${insights.length} insight records using insights endpoint`);
-      // Insights endpoint returns page-level metrics, not individual posts
-      // So we log it but don't process as individual posts
-    } else {
-      console.log('Insights endpoint not available or failed, skipping page insights');
-    }
-    
+
     // Process published posts endpoint
     if (publishedResponse.status === 'fulfilled' && publishedResponse.value.data?.data) {
       const published = publishedResponse.value.data.data;
       console.log(`Found ${published.length} posts using published_posts endpoint`);
-      
+
       published.forEach(post => {
         if (processPost(post, 'published_posts endpoint')) uniquePostsCount++;
       });
     }
     
-    // Try visitor posts endpoint - make it truly optional
-    try {
-      const visitorPostsResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/visitor_posts`, {
-        params: {
-          access_token: pageAccessToken,
-          fields: 'id,message,created_time,permalink_url,full_picture,likes.summary(true),comments.summary(true),from',
-          since,
-          until,
-          limit: 50
-        }
-      });
-      
-      if (visitorPostsResponse.data && visitorPostsResponse.data.data) {
-        console.log(`Visitor posts endpoint returned ${visitorPostsResponse.data.data.length} posts`);
-        visitorPostsResponse.data.data.forEach(post => {
-          if (processPost(post, 'visitor_posts')) uniquePostsCount++;
-        });
-      }
-    } catch (visitorError) {
-      // Log the error but don't fail the entire request
-      console.log(`Visitor posts endpoint not available for page ${pageId}: ${visitorError.message}`);
-    }
-    
+    // Note: visitor_posts endpoint is blocked by OAuth restrictions (Meta 2024)
+
     console.log(`Total unique Facebook posts found: ${uniquePostsCount}`);
     
     // Sort posts by date (newest first)
