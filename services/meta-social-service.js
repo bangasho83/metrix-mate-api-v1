@@ -22,14 +22,11 @@ async function fetchPostInsights(posts, pageAccessToken) {
 
   try {
     // Define the metrics we want to fetch
+    // Note: As of 2024, only post_impressions is available via OAuth
+    // Other metrics (post_impressions_unique, post_engaged_users, post_reactions_by_type_total,
+    // post_clicks, post_video_avg_time_watched, post_reach) require system user token
     const metrics = [
-      'post_impressions',
-      'post_impressions_unique',
-      'post_engaged_users',
-      'post_reactions_by_type_total',
-      'post_clicks',
-      'post_video_avg_time_watched',
-      'post_reach'
+      'post_impressions'
     ];
 
     // Batch posts in groups of 50 (Facebook's limit)
@@ -135,13 +132,7 @@ async function fetchPostInsights(posts, pageAccessToken) {
     return posts.map(post => ({
       ...post,
       insights: {
-        post_impressions: 0,
-        post_impressions_unique: 0,
-        post_engaged_users: 0,
-        post_reactions_by_type_total: {},
-        post_clicks: 0,
-        post_video_avg_time_watched: 0,
-        post_reach: 0
+        post_impressions: 0
       }
     }));
   }
