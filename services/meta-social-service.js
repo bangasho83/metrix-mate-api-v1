@@ -44,10 +44,10 @@ async function fetchPostInsights(posts, pageAccessToken) {
     const postsWithInsights = [];
 
     for (const batch of batches) {
-      try {
-        // Create comma-separated list of post IDs
-        const postIds = batch.map(post => post.id).join(',');
+      // Create comma-separated list of post IDs (outside try block so it's available in catch)
+      const postIds = batch.map(post => post.id).join(',');
 
+      try {
         // Use page token provided by brand connection (no environment fallback)
         const token = pageAccessToken;
 
@@ -66,7 +66,7 @@ async function fetchPostInsights(posts, pageAccessToken) {
           },
           timeout: 15000
         });
-        
+
         console.log(`Insights response received for ${batch.length} posts`);
 
         // Process the insights response
