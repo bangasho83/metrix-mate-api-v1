@@ -429,7 +429,7 @@ exports.getFacebookPosts = async function(pageId, from, to, limit = 25, business
       // Add post details
       postDetails.push({
         id: post.id,
-        message: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+        message: message,  // Full message, no truncation
         created_time: convertToBusinessTimezone(createdTime, businessTimezone),
         permalink_url: originalPermalink,
         thumbnail_url: thumbnailUrl,  // Direct URL string, same format as Instagram
@@ -606,7 +606,7 @@ exports.getInstagramPosts = async function(instagramId, from, to, limit = 25, bu
       
       return {
         id: post.id,
-        caption: post.caption ? (post.caption.substring(0, 100) + (post.caption.length > 100 ? '...' : '')) : '',
+        caption: post.caption || '',  // Full caption, no truncation
         media_type: post.media_type,
         media_url: post.media_url,
         thumbnail_url: thumbnailUrl,
