@@ -684,10 +684,34 @@ exports.getInstagramPostsCount = async function(instagramId, from, to, limit = 2
 };
 
 /**
- * NOTE: Facebook followers count is NOT available via OAuth as of 2024
- * Meta restricted access to fan_count and page_fans metrics to system user tokens only.
- * This function has been removed. Use Instagram followers instead if available.
+ * Gets the followers count for a Facebook page
+ * @param {string} pageId - Facebook page ID
+ * @param {Object} [options={}] - Additional options
+ * @param {string} [options.accessToken] - OAuth access token (required; provided from brand.connections.facebook_page.access_token)
+ * @returns {Promise<number>} Followers count
  */
+exports.getFacebookFollowers = async function(pageId, options = {}) {
+  try {
+    const { accessToken } = options;
+    const pageAccessToken = accessToken;
+
+    if (!pageAccessToken) {
+      throw new Error('Facebook access token is required for getFacebookFollowers (no META_ACCESS_TOKEN fallback)');
+    }
+
+    const response = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}`, {
+      params: {
+        access_token: pageAccessToken,
+        fields: 'followers_count'
+      }
+    });
+
+    return response.data.followers_count || 0;
+  } catch (error) {
+    console.error('Error fetching Facebook followers:', error.message);
+    return 0;
+  }
+};
 
 /**
  * Gets the followers count for an Instagram business account

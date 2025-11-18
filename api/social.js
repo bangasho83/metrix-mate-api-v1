@@ -2,13 +2,13 @@
  * @fileoverview Social API endpoint to fetch Facebook and Instagram page details and posts
  */
 
-const { getFacebookPosts, getInstagramPostsCount, getInstagramFollowers } = require('../services/meta-social-service.js');
+const { getFacebookPosts, getFacebookFollowers, getInstagramPostsCount, getInstagramFollowers } = require('../services/meta-social-service.js');
 const { getBrandInfo, getBrandConnection } = require('../services/firebase-service.js');
 const crypto = require('crypto');
 const axios = require('axios');
 
 const META_BASE_URL = 'https://graph.facebook.com';
-const META_API_VERSION = 'v21.0';
+const META_API_VERSION = 'v24.0';
 
 // Copy the working fetchInstagramInsights function from meta-stats
 async function fetchInstagramInsights(mediaId, accessToken) {
@@ -366,7 +366,9 @@ module.exports = async function handler(req, res) {
     if (fbPageIdToUse) {
       promises.push(getFacebookPosts(fbPageIdToUse, from, to, 25, null, { accessToken: facebookAccessToken }));
       promiseMap.facebookPosts = promises.length - 1;
-      // Note: Facebook followers count is not available via OAuth (Meta restriction as of 2024)
+
+      promises.push(getFacebookFollowers(fbPageIdToUse, { accessToken: facebookAccessToken }));
+      promiseMap.facebookFollowers = promises.length - 1;
     }
 
     // Instagram data
@@ -396,9 +398,11 @@ module.exports = async function handler(req, res) {
     // Process Facebook results
     if (fbPageIdToUse) {
       const facebookPostsResult = results[promiseMap.facebookPosts];
+      const facebookFollowersResult = results[promiseMap.facebookFollowers];
 
       response.facebook = {
         pageId: fbPageIdToUse,
+        followers: facebookFollowersResult.status === 'fulfilled' ? facebookFollowersResult.value : 0,
         posts: {
           count: 0,
           details: []
