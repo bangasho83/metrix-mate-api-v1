@@ -44,12 +44,12 @@ export default async function handler(req, res) {
       const { initializeApp } = await import('firebase/app');
       
       const firebaseConfig = {
-        apiKey: "AIzaSyA5RszTHcZfwZJwYosjZ2ox4wy16zdP1Fo",
-        authDomain: "metrixmate-4535e.firebaseapp.com",
-        projectId: "metrixmate-4535e",
-        storageBucket: "metrixmate-4535e.firebasestorage.app",
-        messagingSenderId: "1088870133164",
-        appId: "1:1088870133164:web:380af7b331c76ac99dde09"
+        apiKey: process.env.FIREBASE_API_KEY,
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.FIREBASE_APP_ID
       };
 
       const app = initializeApp(firebaseConfig);
@@ -72,17 +72,17 @@ export default async function handler(req, res) {
       const { getFirestore } = await import('firebase/firestore');
       
       const firebaseConfig = {
-        apiKey: "AIzaSyA5RszTHcZfwZJwYosjZ2ox4wy16zdP1Fo",
-        authDomain: "metrixmate-4535e.firebaseapp.com",
-        projectId: "metrixmate-4535e",
-        storageBucket: "metrixmate-4535e.firebasestorage.app",
-        messagingSenderId: "1088870133164",
-        appId: "1:1088870133164:web:380af7b331c76ac99dde09"
+        apiKey: process.env.FIREBASE_API_KEY,
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.FIREBASE_APP_ID
       };
 
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
-      
+
       testResults.tests.firestoreInit = {
         status: 'success',
         message: 'Firestore initialized successfully'
@@ -102,17 +102,17 @@ export default async function handler(req, res) {
       const { getFirestore, collection, getDocs, limit, query } = await import('firebase/firestore');
       
       const firebaseConfig = {
-        apiKey: "AIzaSyA5RszTHcZfwZJwYosjZ2ox4wy16zdP1Fo",
-        authDomain: "metrixmate-4535e.firebaseapp.com",
-        projectId: "metrixmate-4535e",
-        storageBucket: "metrixmate-4535e.firebasestorage.app",
-        messagingSenderId: "1088870133164",
-        appId: "1:1088870133164:web:380af7b331c76ac99dde09"
+        apiKey: process.env.FIREBASE_API_KEY,
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.FIREBASE_APP_ID
       };
 
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
-      
+
       // Try to query brands collection (limit to 1 to test connection)
       const brandsRef = collection(db, 'brands');
       const q = query(brandsRef, limit(1));
