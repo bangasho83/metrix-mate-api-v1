@@ -6,7 +6,7 @@
 const axios = require('axios');
 const { convertToBusinessTimezone } = require('../utils/date-utils');
 
-const META_API_VERSION = 'v19.0';
+const META_API_VERSION = 'v24.0';
 const META_BASE_URL = 'https://graph.facebook.com';
 
 /**
@@ -342,29 +342,68 @@ exports.getFacebookPosts = async function(pageId, from, to, limit = 25, business
     const reelIds = new Set();
     const postDetails = [];
     let uniquePostsCount = 0;
-    
+
+    // Helper function to extract thumbnail URL from attachments
+    // Returns direct URL string to match Instagram format
+    const extractThumbnailFromAttachments = (attachments) => {
+      try {
+        if (!attachments || !Array.isArray(attachments.data) || attachments.data.length === 0) {
+          return null;
+        }
+
+        const firstAttachment = attachments.data[0];
+
+        // Try to get media.image.src from first attachment (image object has src property)
+        if (firstAttachment?.media?.image?.src) {
+          return firstAttachment.media.image.src;
+        }
+
+        // Try to get media_url from first attachment
+        if (firstAttachment?.media_url) {
+          return firstAttachment.media_url;
+        }
+
+        // Try subattachments if available
+        if (firstAttachment?.subattachments?.data && Array.isArray(firstAttachment.subattachments.data)) {
+          for (const subAttachment of firstAttachment.subattachments.data) {
+            if (subAttachment?.media?.image?.src) {
+              return subAttachment.media.image.src;
+            }
+            if (subAttachment?.media_url) {
+              return subAttachment.media_url;
+            }
+          }
+        }
+
+        return null;
+      } catch (error) {
+        console.warn('Error extracting thumbnail from attachments:', error.message);
+        return null;
+      }
+    };
+
     // Process a post and add it to the tracking sets if it's unique
     const processPost = (post, source) => {
       if (!post || !post.id) return false;
-      
+
       // Skip if we already have this ID
       if (postIds.has(post.id)) return false;
-      
+
       // Extract message and created time
       const message = post.message || post.description || post.title || '';
       const createdTime = post.created_time;
-      
+
       // Skip if no created_time or outside date range
       if (!createdTime) return false;
-      
+
       const postDate = new Date(createdTime);
       const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999);
       if (postDate < new Date(from) || postDate > toEnd) return false;
-      
+
       // Check for duplicate permalinks
       const originalPermalink = post.permalink_url;
       const permalink = normalizePermalink(originalPermalink);
-      
+
       if (permalink && permalinks.has(permalink)) {
         // If we have this permalink already, only keep the newer post
         const existingTime = permalinks.get(permalink);
@@ -372,97 +411,101 @@ exports.getFacebookPosts = async function(pageId, from, to, limit = 25, business
           return false;
         }
       }
-      
+
       // Check if this is a reel ID (numeric only ID)
       if (/^\d+$/.test(post.id) && reelIds.has(post.id)) {
         return false;
       }
-      
+
       // Add to tracking sets
       postIds.add(post.id);
       if (permalink) permalinks.set(permalink, createdTime);
       if (/^\d+$/.test(post.id)) reelIds.add(post.id);
-      
+
+      // Extract thumbnail URL from attachments with graceful fallback
+      // Returns direct URL string to match Instagram format
+      const thumbnailUrl = extractThumbnailFromAttachments(post.attachments);
+
       // Add post details
       postDetails.push({
         id: post.id,
         message: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
         created_time: convertToBusinessTimezone(createdTime, businessTimezone),
         permalink_url: originalPermalink,
-        picture: post.full_picture || post.thumbnail_url || null,
-        likes: post.likes?.summary?.total_count || 0,
-        comments: post.comments?.summary?.total_count || 0,
-        shares: post.shares?.count || 0
+        thumbnail_url: thumbnailUrl,  // Direct URL string, same format as Instagram
+        likes: 0,  // Not available with pages_read_engagement permission
+        comments: 0,  // Not available with pages_read_engagement permission
+        shares: 0  // Not available with pages_read_engagement permission
       });
-      
+
       return true;
     };
     
     // Use Promise.all to fetch from multiple endpoints in parallel
     // Note: Insights and visitor_posts endpoints are blocked by OAuth restrictions (Meta 2024)
-    const [postsResponse, feedResponse, publishedResponse] = await Promise.allSettled([
-      // 1. Posts edge
-      axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}`, {
-        params: {
-          access_token: pageAccessToken,
-          fields: `posts.since(${since}).until(${until}).limit(100){id,message,created_time,permalink_url,full_picture,likes.summary(true),comments.summary(true),shares}`,
-        }
-      }),
+    // Use the Posts endpoint - most reliable and requires only pages_read_engagement
+    // Fetch attachments with media info and thumbnails for better image handling
+    // Using only fields that work with pages_read_engagement permission
+    const fieldsParam = `id,message,created_time,permalink_url,attachments{media_type,media,media_url,subattachments}`;
+    const fullUrl = `${META_BASE_URL}/${META_API_VERSION}/${pageId}/posts?access_token=${pageAccessToken}&fields=${encodeURIComponent(fieldsParam)}&since=${since}&until=${until}`;
 
-      // 2. Feed endpoint
-      axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/feed`, {
-        params: {
-          access_token: pageAccessToken,
-          fields: 'id,message,created_time,permalink_url,full_picture,likes.summary(true),comments.summary(true),shares',
-          since,
-          until,
-          limit: 100
-        }
-      }),
+    console.log('Exact Facebook API Endpoint:', {
+      url: fullUrl,
+      method: 'GET',
+      pageId,
+      since,
+      until,
+      fields: fieldsParam,
+      tokenStart: pageAccessToken?.substring(0, 20),
+      tokenEnd: pageAccessToken?.substring(pageAccessToken.length - 10)
+    });
 
-      // 3. Published posts endpoint
-      axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/published_posts`, {
-        params: {
-          access_token: pageAccessToken,
-          fields: 'id,message,created_time,permalink_url,full_picture,likes.summary(true),comments.summary(true),shares',
-          since,
-          until,
-          limit: 100
-        }
-      })
-    ]);
-    
-    // Process posts edge response
-    if (postsResponse.status === 'fulfilled' && postsResponse.value.data?.posts?.data) {
-      const posts = postsResponse.value.data.posts.data;
-      console.log(`Found ${posts.length} posts using posts edge`);
+    const postsResponse = await axios.get(`${META_BASE_URL}/${META_API_VERSION}/${pageId}/posts`, {
+      params: {
+        access_token: pageAccessToken,
+        fields: fieldsParam,
+        since,
+        until
+      }
+    });
 
-      posts.forEach(post => {
-        if (processPost(post, 'posts edge')) uniquePostsCount++;
+    // Process posts response
+    try {
+      if (postsResponse.data?.data && Array.isArray(postsResponse.data.data)) {
+        const posts = postsResponse.data.data;
+        console.log(`Found ${posts.length} posts from /posts endpoint`);
+
+        posts.forEach(post => {
+          if (processPost(post, 'posts endpoint')) uniquePostsCount++;
+        });
+      } else {
+        console.log('Posts endpoint response fulfilled but no posts data:', {
+          hasData: !!postsResponse.data,
+          dataKeys: postsResponse.data ? Object.keys(postsResponse.data) : [],
+          fullResponse: JSON.stringify(postsResponse.data).substring(0, 200)
+        });
+      }
+    } catch (error) {
+      const errorCode = error.response?.data?.error?.code;
+      const errorMessage = error.response?.data?.error?.message;
+      const errorType = error.response?.data?.error?.type;
+
+      console.error('Posts endpoint FAILED - Full Error Details:', {
+        apiVersion: META_API_VERSION,
+        endpoint: `${META_BASE_URL}/${META_API_VERSION}/${pageId}/posts`,
+        pageId,
+        errorCode,
+        errorMessage,
+        errorType,
+        httpStatus: error.response?.status,
+        httpStatusText: error.response?.statusText,
+        tokenLength: pageAccessToken?.length,
+        tokenStart: pageAccessToken?.substring(0, 20),
+        tokenEnd: pageAccessToken?.substring(pageAccessToken.length - 10),
+        fullErrorResponse: JSON.stringify(error.response?.data, null, 2)
       });
+      throw error;
     }
-
-    // Process feed endpoint
-    if (feedResponse.status === 'fulfilled' && feedResponse.value.data?.data) {
-      const feed = feedResponse.value.data.data;
-      console.log(`Found ${feed.length} posts using feed endpoint`);
-
-      feed.forEach(post => {
-        if (processPost(post, 'feed endpoint')) uniquePostsCount++;
-      });
-    }
-
-    // Process published posts endpoint
-    if (publishedResponse.status === 'fulfilled' && publishedResponse.value.data?.data) {
-      const published = publishedResponse.value.data.data;
-      console.log(`Found ${published.length} posts using published_posts endpoint`);
-
-      published.forEach(post => {
-        if (processPost(post, 'published_posts endpoint')) uniquePostsCount++;
-      });
-    }
-    
-    // Note: visitor_posts endpoint is blocked by OAuth restrictions (Meta 2024)
 
     console.log(`Total unique Facebook posts found: ${uniquePostsCount}`);
     
