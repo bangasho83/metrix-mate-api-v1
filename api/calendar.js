@@ -58,6 +58,7 @@ module.exports = withLogging(async (req, res) => {
           caption: d.caption || '',
           designBrief: d.designBrief || '',
           type: d.type || '',
+          category: d.category || '',
           contentFormat: d.contentFormat || '',
           adspend: d.adspend || 0,
           media: d.media || [],
@@ -174,7 +175,7 @@ module.exports = withLogging(async (req, res) => {
     }
   }
 
-  // PUT: replace a specific calendar document by id
+  // PUT: update a specific calendar document by id (merge mode)
   if (req.method === 'PUT') {
     try {
       const body = req.body || {};
@@ -202,7 +203,8 @@ module.exports = withLogging(async (req, res) => {
       // Set/update updatedAt timestamp
       data.updatedAt = new Date();
 
-      await docRef.set(data, { merge: false });
+      // Use merge: true to update only provided fields
+      await docRef.set(data, { merge: true });
       return res.status(200).json({ ok: true, id: String(docId) });
     } catch (err) {
       console.error('calendar PUT error:', err?.message || err);
@@ -260,6 +262,7 @@ module.exports = withLogging(async (req, res) => {
         caption: item.caption || '',
         designBrief: item.designBrief || '',
         type: item.type || '',
+        category: item.category || '',
         contentFormat: item.contentFormat || '',
         adspend: parseInt(item.adspend, 10) || 0,
         media: processedMedia,
