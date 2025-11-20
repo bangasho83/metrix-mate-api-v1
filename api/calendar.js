@@ -175,7 +175,7 @@ module.exports = withLogging(async (req, res) => {
     }
   }
 
-  // PUT: update a specific calendar document by id (merge mode)
+  // PUT: replace a specific calendar document by id
   if (req.method === 'PUT') {
     try {
       const body = req.body || {};
@@ -203,8 +203,7 @@ module.exports = withLogging(async (req, res) => {
       // Set/update updatedAt timestamp
       data.updatedAt = new Date();
 
-      // Use merge: true to update only provided fields
-      await docRef.set(data, { merge: true });
+      await docRef.set(data, { merge: false });
       return res.status(200).json({ ok: true, id: String(docId) });
     } catch (err) {
       console.error('calendar PUT error:', err?.message || err);
