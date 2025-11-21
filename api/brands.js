@@ -126,10 +126,10 @@ export default async function handler(req, res) {
     }
   }
 
-  // GET: List brands (excludes archived)
+  // GET: List brands (excludes archived by default)
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { organizationId, seo, includeArchived } = req.query || {};
+  const { organizationId, seo, includeArchived, onlyArchived } = req.query || {};
 
   try {
     let snap;
@@ -175,9 +175,17 @@ export default async function handler(req, res) {
     snap.forEach(doc => {
       const data = doc.data();
 
-      // Skip archived brands unless explicitly requested
-      if (data?.archived === true && includeArchived !== 'true') {
-        return;
+      // Filter archived brands based on query parameters
+      if (onlyArchived === 'true') {
+        // Only show archived brands
+        if (data?.archived !== true) {
+          return;
+        }
+      } else {
+        // Skip archived brands unless explicitly requested
+        if (data?.archived === true && includeArchived !== 'true') {
+          return;
+        }
       }
 
       if (seo) {
