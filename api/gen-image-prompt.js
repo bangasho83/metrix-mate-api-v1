@@ -106,6 +106,8 @@ module.exports = withLogging(async (req, res) => {
       totalTimeMs: briefGenerationTime
     });
 
+    console.log('Generate Image Prompt API - Full Response:', JSON.stringify(response, null, 2));
+
     return res.status(200).json(response);
 
   } catch (error) {
