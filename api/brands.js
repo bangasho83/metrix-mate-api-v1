@@ -2,6 +2,7 @@
  * Brands API
  * GET /api/brands?organizationId=ORG_ID - Returns brand documents (excludes archived)
  * DELETE /api/brands - Soft delete (archive) a brand
+ * PATCH /api/brands - Restore an archived brand
  */
 
 import { db } from '../services/firebase-service.js';
@@ -11,7 +12,7 @@ export const config = { maxDuration: 30 };
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -121,6 +122,103 @@ export default async function handler(req, res) {
       });
       return res.status(500).json({
         error: 'Failed to archive brand',
+        details: err?.message || 'Unknown error'
+      });
+    }
+  }
+
+  // PATCH: Restore an archived brand
+  if (req.method === 'PATCH') {
+    try {
+      const body = req.body || {};
+      const { brandId, organizationId, userId } = body;
+
+      // Validate required parameters
+      if (!brandId || typeof brandId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: brandId',
+          message: 'brandId must be a valid string'
+        });
+      }
+
+      if (!organizationId || typeof organizationId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: organizationId',
+          message: 'organizationId must be a valid string'
+        });
+      }
+
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: userId',
+          message: 'userId must be a valid string'
+        });
+      }
+
+      // Get the brand document
+      const brandRef = db.collection('brands').doc(brandId);
+      const brandDoc = await brandRef.get();
+
+      if (!brandDoc.exists) {
+        return res.status(404).json({
+          error: 'Brand not found',
+          brandId
+        });
+      }
+
+      const brandData = brandDoc.data();
+
+      // Verify the brand belongs to the organization
+      if (brandData.organizationId !== organizationId) {
+        return res.status(403).json({
+          error: 'Unauthorized',
+          message: 'Brand does not belong to this organization',
+          brandId,
+          organizationId
+        });
+      }
+
+      // Check if brand is archived
+      if (brandData.archived !== true) {
+        return res.status(400).json({
+          error: 'Brand is not archived',
+          brandId,
+          message: 'Only archived brands can be restored'
+        });
+      }
+
+      // Perform restore (unarchive)
+      const now = new Date();
+      const timestamp = db.FieldValue ? db.FieldValue.serverTimestamp() : now;
+
+      const restoreData = {
+        archived: false,
+        archivedAt: null,
+        updatedAt: timestamp
+      };
+
+      await brandRef.update(restoreData);
+
+      console.log('Brands API - Brand restored:', {
+        brandId,
+        organizationId,
+        userId,
+        restoredAt: now.toISOString()
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Brand restored successfully',
+        brand: {
+          id: brandId,
+          organizationId,
+          restoredAt: now.toISOString()
+        }
+      });
+    } catch (err) {
+      console.error('Brands API - Restore error:', err?.message || err);
+      return res.status(500).json({
+        error: 'Failed to restore brand',
         details: err?.message || 'Unknown error'
       });
     }
