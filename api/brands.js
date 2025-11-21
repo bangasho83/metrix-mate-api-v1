@@ -87,8 +87,8 @@ export default async function handler(req, res) {
         updatedAt: timestamp,
         // Preserve original data for audit trail
         archivedMetadata: {
-          brandName: brandData.name,
-          organizationId: brandData.organizationId,
+          brandName: brandData.name || 'Unknown',
+          organizationId: brandData.organizationId || organizationId,
           userId: userId,
           archivedTimestamp: now.toISOString()
         }
