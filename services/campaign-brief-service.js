@@ -65,16 +65,16 @@ Return the updated brief with all sections, incorporating the requested changes.
     try {
       const response = await Promise.race([
         openai.chat.completions.create({
-          model: 'gpt-4o',
+          model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.7,
-          max_tokens: 2000
+          max_tokens: 1500
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief update)')), 45000)
+          setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief update)')), 15000)
         )
       ]);
 
@@ -147,16 +147,16 @@ Return the response as a well-formatted markdown document with clear section hea
   try {
     const response = await Promise.race([
       openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 1500
       }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief)')), 45000)
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief)')), 15000)
       )
     ]);
 
