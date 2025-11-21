@@ -28,30 +28,9 @@ exports.generateCampaignBrief = async ({ campaignIdea, brandName, industry, exis
 
   // If there's an existing guide, use a different prompt for applying feedback
   if (existingGuide) {
-    const systemPrompt = `You are an expert creative strategist and campaign copywriter.
-You will be given an existing design brief and feedback/changes to apply to it.
-Your job is to update the existing brief based on the feedback while maintaining the same structure and format.
-
-The brief should maintain the following clearly labeled sections:
-
-**Campaign Title** — Create a catchy, memorable name that captures the spirit of the campaign.
-
-**Objective** — Define what the campaign aims to achieve in a few strong sentences.
-
-**Key Message** — Write the main line or slogan that captures the essence of the campaign.
-
-**Visual Direction** — Describe in detail how the design should look and feel. Include composition, tone, color palette, lighting, mood, and emotional cues.
-
-**Design Elements** — Specify layout details such as focal objects, supporting props, product placement, logo or symbol positioning, visual balance, and proportions.
-
-**Text Layout Guidance** — Recommend what text to include, where it should appear, how prominent it should be, and what style or tone the typography should convey.
-
-**Tone & Emotion** — Explain how the audience should feel when seeing the post (e.g., excited, inspired, relaxed, curious, etc.).
-
-**Optional Notes for Designer** — Add professional reminders on aesthetic balance, realism, spacing, alignment, color harmony, and stylistic dos & don'ts.
-
-Apply the requested changes while keeping the structure clear, descriptive, and strategic.
-Return the updated brief as a well-formatted markdown document with clear section headers.`;
+    const systemPrompt = `You are a creative strategist. Update the design brief based on feedback while maintaining structure.
+Include: Campaign Title, Objective, Key Message, Visual Direction, Design Elements, Text Layout, Tone & Emotion, Designer Notes.
+Return as markdown with clear headers.`;
 
     const userPrompt = `Here is the existing design brief:
 
@@ -74,7 +53,7 @@ Return the updated brief with all sections, incorporating the requested changes.
           max_tokens: 1500
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief update)')), 15000)
+          setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief update)')), 45000)
         )
       ]);
 
@@ -105,32 +84,8 @@ Return the updated brief with all sections, incorporating the requested changes.
   }
 
   // Original flow for creating a new brief
-  const systemPrompt = `You are an expert creative strategist and campaign copywriter.
-Take the short campaign idea I provide and expand it into a complete, professional design brief for a social media campaign.
-
-The brief should include the following clearly labeled sections:
-
-**Campaign Title** — Create a catchy, memorable name that captures the spirit of the campaign.
-
-**Objective** — Define what the campaign aims to achieve in a few strong sentences.
-
-**Key Message** — Write the main line or slogan that captures the essence of the campaign.
-
-**Visual Direction** — Describe in detail how the design should look and feel. Include composition, tone, color palette, lighting, mood, and emotional cues.
-
-**Design Elements** — Specify layout details such as focal objects, supporting props, product placement, logo or symbol positioning, visual balance, and proportions.
-
-**Text Layout Guidance** — Recommend what text to include, where it should appear, how prominent it should be, and what style or tone the typography should convey.
-
-**Tone & Emotion** — Explain how the audience should feel when seeing the post (e.g., excited, inspired, relaxed, curious, etc.).
-
-**Optional Notes for Designer** — Add professional reminders on aesthetic balance, realism, spacing, alignment, color harmony, and stylistic dos & don'ts.
-
-Keep the structure clear, descriptive, and strategic — as if briefing a top-tier creative team.
-Avoid referencing specific brands or logos unless they appear in the user's input.
-Focus on universal design excellence, storytelling, and visual psychology rather than brand identity.
-
-Return the response as a well-formatted markdown document with clear section headers.`;
+  const systemPrompt = `You are a creative director. Expand the campaign idea into a design brief with: Campaign Title, Objective, Key Message, Visual Direction, Design Elements, Text Layout, Tone & Emotion, Designer Notes.
+Be strategic and actionable. Return as markdown with clear headers.`;
 
   let userPrompt = `Campaign Idea: ${campaignIdea}`;
 
@@ -156,7 +111,7 @@ Return the response as a well-formatted markdown document with clear section hea
         max_tokens: 1500
       }),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief)')), 15000)
+        setTimeout(() => reject(new Error('OpenAI API timeout (campaign brief)')), 45000)
       )
     ]);
 
