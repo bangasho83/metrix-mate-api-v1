@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     try {
       const body = req.body || {};
-      const { brandId, organizationId } = body;
+      const { brandId, organizationId, userId } = body;
 
       // Validate required parameters
       if (!brandId || typeof brandId !== 'string') {
@@ -34,6 +34,13 @@ export default async function handler(req, res) {
         return res.status(400).json({
           error: 'Missing or invalid required field: organizationId',
           message: 'organizationId must be a valid string'
+        });
+      }
+
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: userId',
+          message: 'userId must be a valid string'
         });
       }
 
@@ -82,6 +89,7 @@ export default async function handler(req, res) {
         archivedMetadata: {
           brandName: brandData.name,
           organizationId: brandData.organizationId,
+          userId: userId,
           archivedTimestamp: now.toISOString()
         }
       };
