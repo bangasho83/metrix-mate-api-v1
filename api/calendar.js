@@ -21,6 +21,7 @@ module.exports = withLogging(async (req, res) => {
       const fromDate = q.from || q.fromDate || q.start;
       const toDate = q.to || q.toDate || q.end;
       const status = q.status;
+      const category = q.category;
 
       // Must provide either brandId or organizationId
       if (!brand && !organization) {
@@ -83,6 +84,11 @@ module.exports = withLogging(async (req, res) => {
 
         // Apply status filtering
         if (status && item.status !== status) {
+          includeItem = false;
+        }
+
+        // Apply category filtering
+        if (category && item.category !== category) {
           includeItem = false;
         }
 
