@@ -16,14 +16,15 @@ module.exports = withLogging(async (req, res) => {
   if (req.method === 'GET') {
     try {
       const q = req.query || {};
-      const brand = q.brandId || q.brand_id || q.brand;
-      const organization = q.organizationId || q.organization_id || q.org;
-      const fromDate = q.from || q.fromDate || q.start;
-      const toDate = q.to || q.toDate || q.end;
+      // Support case-insensitive parameter names
+      const brand = q.brandId || q.brand_id || q.brand || q.brandid || q.brand_ID;
+      const organization = q.organizationId || q.organization_id || q.org || q.organizationid || q.organization_ID;
+      const fromDate = q.from || q.fromDate || q.start || q.fromdate || q.from_date;
+      const toDate = q.to || q.toDate || q.end || q.todate || q.to_date;
       const status = q.status;
       const category = q.category;
-      const minAdspend = q.minAdspend ? parseInt(q.minAdspend, 10) : null;
-      const maxAdspend = q.maxAdspend ? parseInt(q.maxAdspend, 10) : null;
+      const minAdspend = (q.minAdspend || q.minadspend || q.min_adspend) ? parseInt(q.minAdspend || q.minadspend || q.min_adspend, 10) : null;
+      const maxAdspend = (q.maxAdspend || q.maxadspend || q.max_adspend) ? parseInt(q.maxAdspend || q.maxadspend || q.max_adspend, 10) : null;
 
       // Must provide either brandId or organizationId
       if (!brand && !organization) {
@@ -230,20 +231,23 @@ module.exports = withLogging(async (req, res) => {
       const previousStatus = existingData.status || 'draft';
       const now = new Date();
 
-      // Create status history entry
-      const statusHistoryEntry = {
-        from: previousStatus,
-        to: status,
-        changedBy: changedBy,
-        changedAt: now.toISOString(),
-        comment: comment
-      };
-
       // Get existing status history or initialize empty array
       const existingHistory = Array.isArray(existingData.statusHistory) ? existingData.statusHistory : [];
-      const updatedHistory = [...existingHistory, statusHistoryEntry];
+      let updatedHistory = existingHistory;
 
-      // Update status and add to history
+      // Only add to statusHistory if status is not 'assigned'
+      if (status !== 'assigned') {
+        const statusHistoryEntry = {
+          from: previousStatus,
+          to: status,
+          changedBy: changedBy,
+          changedAt: now.toISOString(),
+          comment: comment
+        };
+        updatedHistory = [...existingHistory, statusHistoryEntry];
+      }
+
+      // Update status and add to history (if not 'assigned')
       await docRef.update({
         status: status,
         statusHistory: updatedHistory,
