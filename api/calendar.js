@@ -92,6 +92,13 @@ module.exports = withLogging(async (req, res) => {
           includeItem = false;
         }
 
+        // Apply status filtering (always in memory when orFilters is true)
+        if (includeItem && (q.orFilters === 'true' || q.orfilters === 'true')) {
+          if (status && item.status !== status) {
+            includeItem = false;
+          }
+        }
+
         // Apply OR filters if specified (category OR adspend)
         if (includeItem && (q.orFilters === 'true' || q.orfilters === 'true')) {
           let matchesOrFilter = false;
