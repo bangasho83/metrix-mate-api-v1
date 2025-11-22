@@ -49,18 +49,12 @@ module.exports = withLogging(async (req, res) => {
 
       // Apply AND filters at query time (not OR filters)
       if (!q.orFilters || (q.orFilters !== 'true' && q.orfilters !== 'true')) {
-        // AND logic: apply all filters at query time
+        // AND logic: apply equality filters at query time
         if (status) {
           queryRef = queryRef.where('status', '==', status);
         }
         if (category) {
           queryRef = queryRef.where('category', '==', category);
-        }
-        if (fromDate) {
-          queryRef = queryRef.where('date', '>=', fromDate);
-        }
-        if (toDate) {
-          queryRef = queryRef.where('date', '<=', toDate);
         }
       }
 
@@ -90,8 +84,16 @@ module.exports = withLogging(async (req, res) => {
 
         let includeItem = true;
 
+        // Apply date filtering (always in memory)
+        if (fromDate && item.date && item.date < fromDate) {
+          includeItem = false;
+        }
+        if (toDate && item.date && item.date > toDate) {
+          includeItem = false;
+        }
+
         // Apply OR filters if specified (category OR adspend)
-        if (q.orFilters === 'true' || q.orfilters === 'true') {
+        if (includeItem && (q.orFilters === 'true' || q.orfilters === 'true')) {
           let matchesOrFilter = false;
 
           // Check if matches category OR adspend filter
@@ -109,19 +111,8 @@ module.exports = withLogging(async (req, res) => {
           if (!matchesOrFilter) {
             includeItem = false;
           }
-
-          // Still apply date and status as AND conditions
-          if (includeItem && fromDate && item.date && item.date < fromDate) {
-            includeItem = false;
-          }
-          if (includeItem && toDate && item.date && item.date > toDate) {
-            includeItem = false;
-          }
-          if (includeItem && status && item.status !== status) {
-            includeItem = false;
-          }
-        } else {
-          // For AND logic, only apply adspend filters here (others are in query)
+        } else if (includeItem) {
+          // For AND logic, apply adspend filters here (status and category are in query)
           if (minAdspend !== null && item.adspend < minAdspend) {
             includeItem = false;
           }
