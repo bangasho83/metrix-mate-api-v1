@@ -103,6 +103,27 @@ module.exports = withLogging(async (req, res) => {
           includeItem = false;
         }
 
+        // Apply OR filters if specified (category OR adspend)
+        if (q.orFilters === 'true' || q.orfilters === 'true') {
+          let matchesOrFilter = false;
+
+          // Check if matches category OR adspend filter
+          if (category && item.category === category) {
+            matchesOrFilter = true;
+          }
+          if (minAdspend !== null && item.adspend >= minAdspend) {
+            matchesOrFilter = true;
+          }
+          if (maxAdspend !== null && item.adspend <= maxAdspend) {
+            matchesOrFilter = true;
+          }
+
+          // If orFilters is enabled, override the AND logic
+          if (!matchesOrFilter) {
+            includeItem = false;
+          }
+        }
+
         if (includeItem) {
           items.push(item);
         }
