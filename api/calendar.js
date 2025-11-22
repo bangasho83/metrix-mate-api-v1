@@ -40,19 +40,31 @@ module.exports = withLogging(async (req, res) => {
 
       let snapshot;
 
+      // Build query with filters
       if (brand) {
-        // Filter by specific brand
-        filterType = 'brandId';
-        filterValue = brand;
         queryRef = db.collection('calendar').where('brandId', '==', brand);
-        snapshot = await queryRef.get();
       } else {
-        // Filter by organization (all brands in the organization)
-        filterType = 'organizationId';
-        filterValue = organization;
         queryRef = db.collection('calendar').where('organizationId', '==', organization);
-        snapshot = await queryRef.get();
       }
+
+      // Apply AND filters at query time (not OR filters)
+      if (!q.orFilters || (q.orFilters !== 'true' && q.orfilters !== 'true')) {
+        // AND logic: apply all filters at query time
+        if (status) {
+          queryRef = queryRef.where('status', '==', status);
+        }
+        if (category) {
+          queryRef = queryRef.where('category', '==', category);
+        }
+        if (fromDate) {
+          queryRef = queryRef.where('date', '>=', fromDate);
+        }
+        if (toDate) {
+          queryRef = queryRef.where('date', '<=', toDate);
+        }
+      }
+
+      snapshot = await queryRef.get();
       let items = [];
       snapshot.forEach(doc => {
         const d = doc.data() || {};
@@ -76,19 +88,7 @@ module.exports = withLogging(async (req, res) => {
           createdAt: d.createdAt || null
         };
 
-        // Apply date filtering in memory
         let includeItem = true;
-        if (fromDate && item.date && item.date < fromDate) {
-          includeItem = false;
-        }
-        if (toDate && item.date && item.date > toDate) {
-          includeItem = false;
-        }
-
-        // Apply status filtering
-        if (status && item.status !== status) {
-          includeItem = false;
-        }
 
         // Apply OR filters if specified (category OR adspend)
         if (q.orFilters === 'true' || q.orfilters === 'true') {
@@ -109,14 +109,19 @@ module.exports = withLogging(async (req, res) => {
           if (!matchesOrFilter) {
             includeItem = false;
           }
-        } else {
-          // Default AND logic: all filters must match
-          // Apply category filtering
-          if (category && item.category !== category) {
+
+          // Still apply date and status as AND conditions
+          if (includeItem && fromDate && item.date && item.date < fromDate) {
             includeItem = false;
           }
-
-          // Apply adspend filtering
+          if (includeItem && toDate && item.date && item.date > toDate) {
+            includeItem = false;
+          }
+          if (includeItem && status && item.status !== status) {
+            includeItem = false;
+          }
+        } else {
+          // For AND logic, only apply adspend filters here (others are in query)
           if (minAdspend !== null && item.adspend < minAdspend) {
             includeItem = false;
           }
