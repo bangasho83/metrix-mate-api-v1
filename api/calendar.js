@@ -264,7 +264,7 @@ module.exports = withLogging(async (req, res) => {
     }
   }
 
-  // PUT: replace a specific calendar document by id
+  // PUT: update specific fields of a calendar document by id (merge mode)
   if (req.method === 'PUT') {
     try {
       const body = req.body || {};
@@ -280,19 +280,11 @@ module.exports = withLogging(async (req, res) => {
 
       const docRef = db.collection('calendar').doc(String(docId));
 
-      // Preserve createdAt if not provided
-      if (data.createdAt === undefined) {
-        const existing = await docRef.get();
-        if (existing.exists) {
-          const ex = existing.data() || {};
-          if (ex.createdAt) data.createdAt = ex.createdAt;
-        }
-      }
-
       // Set/update updatedAt timestamp
       data.updatedAt = new Date();
 
-      await docRef.set(data, { merge: false });
+      // Use merge: true to only update provided fields, preserving all other fields
+      await docRef.set(data, { merge: true });
       return res.status(200).json({ ok: true, id: String(docId) });
     } catch (err) {
       console.error('calendar PUT error:', err?.message || err);
