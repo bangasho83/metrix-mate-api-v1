@@ -42,8 +42,12 @@ module.exports = withLogging(async (req, res) => {
 
       // Build query with filters
       if (brand) {
+        filterType = 'brandId';
+        filterValue = brand;
         queryRef = db.collection('calendar').where('brandId', '==', brand);
       } else {
+        filterType = 'organizationId';
+        filterValue = organization;
         queryRef = db.collection('calendar').where('organizationId', '==', organization);
       }
 
