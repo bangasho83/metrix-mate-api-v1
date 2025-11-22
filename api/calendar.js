@@ -234,10 +234,11 @@ module.exports = withLogging(async (req, res) => {
       // Get existing status history or initialize empty array
       const existingHistory = Array.isArray(existingData.statusHistory) ? existingData.statusHistory : [];
       let updatedHistory = existingHistory;
+      let statusHistoryEntry = null;
 
       // Only add to statusHistory if status is not 'assigned'
       if (status !== 'assigned') {
-        const statusHistoryEntry = {
+        statusHistoryEntry = {
           from: previousStatus,
           to: status,
           changedBy: changedBy,
@@ -254,14 +255,20 @@ module.exports = withLogging(async (req, res) => {
         updatedAt: now
       });
 
-      return res.status(200).json({
+      const response = {
         ok: true,
         id: String(docId),
         status: status,
         previousStatus: previousStatus,
-        statusHistoryEntry: statusHistoryEntry,
         updatedAt: now.toISOString()
-      });
+      };
+
+      // Only include statusHistoryEntry if it was created (status !== 'assigned')
+      if (statusHistoryEntry) {
+        response.statusHistoryEntry = statusHistoryEntry;
+      }
+
+      return res.status(200).json(response);
     } catch (err) {
       console.error('calendar PATCH error:', err?.message || err);
       return res.status(500).json({ error: 'Failed to update calendar status' });
