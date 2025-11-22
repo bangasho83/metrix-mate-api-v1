@@ -20,6 +20,7 @@ module.exports = withLogging(async (req, res) => {
       const organization = q.organizationId || q.organization_id || q.org;
       const fromDate = q.from || q.fromDate || q.start;
       const toDate = q.to || q.toDate || q.end;
+      const status = q.status;
 
       // Must provide either brandId or organizationId
       if (!brand && !organization) {
@@ -61,6 +62,7 @@ module.exports = withLogging(async (req, res) => {
           category: d.category || '',
           channels: d.channels || '',
           contentFormat: d.contentFormat || '',
+          status: d.status || 'draft',
           adspend: d.adspend || 0,
           media: d.media || [],
           organizationId: d.organizationId || null,
@@ -75,6 +77,11 @@ module.exports = withLogging(async (req, res) => {
           includeItem = false;
         }
         if (toDate && item.date && item.date > toDate) {
+          includeItem = false;
+        }
+
+        // Apply status filtering
+        if (status && item.status !== status) {
           includeItem = false;
         }
 
@@ -265,6 +272,7 @@ module.exports = withLogging(async (req, res) => {
         category: item.category || '',
         channels: item.channels || '',
         contentFormat: item.contentFormat || '',
+        status: item.status || 'draft',
         adspend: parseInt(item.adspend, 10) || 0,
         media: processedMedia,
         organizationId: item.organizationId || null,
