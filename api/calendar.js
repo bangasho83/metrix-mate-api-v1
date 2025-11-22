@@ -63,6 +63,7 @@ module.exports = withLogging(async (req, res) => {
           channels: d.channels || '',
           contentFormat: d.contentFormat || '',
           status: d.status || 'draft',
+          statusHistory: d.statusHistory || [],
           adspend: d.adspend || 0,
           media: d.media || [],
           organizationId: d.organizationId || null,
@@ -189,12 +190,17 @@ module.exports = withLogging(async (req, res) => {
       const body = req.body || {};
       const docId = body.id || body.docId || (req.query && (req.query.id || req.query.docId));
       const status = body.status;
+      const changedBy = body.changedBy || body.userId;
+      const comment = body.comment || '';
 
       if (!docId) {
         return res.status(400).json({ error: 'Missing required parameter: id' });
       }
       if (!status || typeof status !== 'string') {
         return res.status(400).json({ error: 'Missing or invalid required parameter: status (string)' });
+      }
+      if (!changedBy || typeof changedBy !== 'string') {
+        return res.status(400).json({ error: 'Missing or invalid required parameter: changedBy (userId)' });
       }
 
       const docRef = db.collection('calendar').doc(String(docId));
@@ -204,17 +210,37 @@ module.exports = withLogging(async (req, res) => {
         return res.status(404).json({ error: 'Calendar post not found', id: docId });
       }
 
-      // Update only the status field
+      const existingData = existing.data() || {};
+      const previousStatus = existingData.status || 'draft';
+      const now = new Date();
+
+      // Create status history entry
+      const statusHistoryEntry = {
+        from: previousStatus,
+        to: status,
+        changedBy: changedBy,
+        changedAt: now.toISOString(),
+        comment: comment
+      };
+
+      // Get existing status history or initialize empty array
+      const existingHistory = Array.isArray(existingData.statusHistory) ? existingData.statusHistory : [];
+      const updatedHistory = [...existingHistory, statusHistoryEntry];
+
+      // Update status and add to history
       await docRef.update({
         status: status,
-        updatedAt: new Date()
+        statusHistory: updatedHistory,
+        updatedAt: now
       });
 
       return res.status(200).json({
         ok: true,
         id: String(docId),
         status: status,
-        updatedAt: new Date().toISOString()
+        previousStatus: previousStatus,
+        statusHistoryEntry: statusHistoryEntry,
+        updatedAt: now.toISOString()
       });
     } catch (err) {
       console.error('calendar PATCH error:', err?.message || err);
@@ -312,6 +338,7 @@ module.exports = withLogging(async (req, res) => {
         channels: item.channels || '',
         contentFormat: item.contentFormat || '',
         status: item.status || 'draft',
+        statusHistory: item.statusHistory || [],
         adspend: parseInt(item.adspend, 10) || 0,
         media: processedMedia,
         organizationId: item.organizationId || null,
