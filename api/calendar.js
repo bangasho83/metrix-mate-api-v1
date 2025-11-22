@@ -2,7 +2,7 @@
 module.exports.config = { maxDuration: 60 };
 
 const { withLogging } = require('../utils/logging.cjs.js');
-const { db } = require('../services/firebase-service');
+const { db, getBrandInfo, getOrganizationInfo } = require('../services/firebase-service');
 
 module.exports = withLogging(async (req, res) => {
   // CORS
@@ -155,35 +155,32 @@ module.exports = withLogging(async (req, res) => {
 
       if (filterType === 'organizationId' && items.length > 0) {
         try {
-          // Get organization details
-          const orgDoc = await db.collection('organizations').doc(organization).get();
-          const orgData = orgDoc.exists ? orgDoc.data() : null;
+          // Get organization details using cached function
+          const orgInfo = await getOrganizationInfo(organization, { useCache: true });
 
           // Get unique brand IDs from the calendar posts
           const brandIds = [...new Set(items.map(item => item.brandId).filter(Boolean))];
 
-          // Fetch brand details for all brands
+          // Fetch brand details for all brands using cached function
           const brandPromises = brandIds.map(brandId =>
-            db.collection('brands').doc(brandId).get()
+            getBrandInfo(brandId, { useCache: true }).catch(err => {
+              console.warn(`Failed to fetch brand ${brandId}:`, err.message);
+              return null;
+            })
           );
-          const brandDocs = await Promise.all(brandPromises);
+          const brandInfos = await Promise.all(brandPromises);
 
           // Create brand lookup map
           const brandMap = {};
-          brandDocs.forEach((doc, index) => {
+          brandInfos.forEach((brandInfo, index) => {
             const brandId = brandIds[index];
-            if (doc.exists) {
-              const brandData = doc.data();
-
-              // Use client_name as the brand name field
-              const brandName = brandData.client_name || 'Unknown Brand';
-
+            if (brandInfo) {
               brandMap[brandId] = {
-                name: brandName,
-                website: brandData.website || brandData.url || null
+                name: brandInfo.name || 'Unknown Brand',
+                website: brandInfo.website || null
               };
             } else {
-              console.warn(`Brand document ${brandId} does not exist in brands collection`);
+              console.warn(`Brand ${brandId} not found or failed to fetch`);
               brandMap[brandId] = {
                 name: 'Unknown Brand',
                 website: null
@@ -192,7 +189,7 @@ module.exports = withLogging(async (req, res) => {
           });
 
           // Add organization and brand info to response
-          response.organizationName = orgData?.name || 'Unknown Organization';
+          response.organizationName = orgInfo?.name || 'Unknown Organization';
 
           // Add brand names to each item
           response.items = items.map(item => ({

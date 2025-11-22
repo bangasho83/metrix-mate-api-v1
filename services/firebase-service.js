@@ -599,6 +599,16 @@ const BRAND_CACHE = {
 };
 
 /**
+ * In-memory cache for organization information
+ * @private
+ */
+const ORG_CACHE = {
+  data: {},
+  timestamps: {},
+  TTL: 15 * 60 * 1000 // 15 minutes cache TTL
+};
+
+/**
  * Utility function to get comprehensive brand information with caching
  * This is the recommended function for all services to fetch brand data
  *
@@ -838,6 +848,86 @@ const getBrandConnection = async (brandId, connectionType, options = {}) => {
   }
 };
 
+/**
+ * Utility function to get comprehensive organization information with caching
+ * @param {string} organizationId - The organization ID to fetch
+ * @param {Object} options - Optional configuration
+ * @param {string} options.idToken - Firebase ID token for authentication (optional)
+ * @param {boolean} options.useCache - Whether to use cache (default: true)
+ * @returns {Promise<Object|null>} Organization information object or null if not found
+ */
+const getOrganizationInfo = async (organizationId, options = {}) => {
+  const {
+    idToken = null,
+    useCache = true
+  } = options;
+
+  try {
+    console.log('Organization Utility - Fetching organization info:', { organizationId, useCache });
+
+    if (!organizationId) {
+      throw new Error('Organization ID is required');
+    }
+
+    // Check cache first if enabled
+    if (useCache) {
+      const now = Date.now();
+      const cachedData = ORG_CACHE.data[organizationId];
+      const cachedTime = ORG_CACHE.timestamps[organizationId];
+
+      if (cachedData && cachedTime && (now - cachedTime) < ORG_CACHE.TTL) {
+        console.log('Organization Utility - Cache hit:', organizationId);
+        return cachedData;
+      }
+    }
+
+    // Verify token if provided
+    if (idToken) {
+      await verifyIdToken(idToken);
+    }
+
+    // Fetch from Firestore
+    const orgRef = db.collection('orgs').doc(organizationId);
+    const orgSnap = await orgRef.get();
+
+    if (!orgSnap.exists) {
+      console.log('Organization Utility - Organization not found:', organizationId);
+      return null;
+    }
+
+    const rawData = orgSnap.data();
+
+    // Normalize organization data
+    const orgInfo = {
+      id: orgSnap.id,
+      ...rawData,
+      name: rawData.name || rawData.organizationName || 'Unknown Organization',
+      createdAt: rawData.createdAt || null
+    };
+
+    console.log('Organization Utility - Organization fetched successfully:', {
+      organizationId,
+      name: orgInfo.name
+    });
+
+    // Cache the result
+    if (useCache) {
+      ORG_CACHE.data[organizationId] = orgInfo;
+      ORG_CACHE.timestamps[organizationId] = Date.now();
+    }
+
+    return orgInfo;
+
+  } catch (error) {
+    console.error('Organization Utility - Error fetching organization info:', {
+      organizationId,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
+};
+
 module.exports = {
   getPlacesByBrandId,
   getPlaceById,
@@ -853,5 +943,6 @@ module.exports = {
   getBrandConnections,
   getBrandConnection,
   clearBrandCache,
+  getOrganizationInfo,
   db
 };
