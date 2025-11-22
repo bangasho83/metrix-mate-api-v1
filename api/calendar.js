@@ -7,7 +7,7 @@ const { db } = require('../services/firebase-service');
 module.exports = withLogging(async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -180,6 +180,45 @@ module.exports = withLogging(async (req, res) => {
         details: err?.message || 'Unknown error',
         code: err?.code
       });
+    }
+  }
+
+  // PATCH: Update calendar status only
+  if (req.method === 'PATCH') {
+    try {
+      const body = req.body || {};
+      const docId = body.id || body.docId || (req.query && (req.query.id || req.query.docId));
+      const status = body.status;
+
+      if (!docId) {
+        return res.status(400).json({ error: 'Missing required parameter: id' });
+      }
+      if (!status || typeof status !== 'string') {
+        return res.status(400).json({ error: 'Missing or invalid required parameter: status (string)' });
+      }
+
+      const docRef = db.collection('calendar').doc(String(docId));
+      const existing = await docRef.get();
+
+      if (!existing.exists) {
+        return res.status(404).json({ error: 'Calendar post not found', id: docId });
+      }
+
+      // Update only the status field
+      await docRef.update({
+        status: status,
+        updatedAt: new Date()
+      });
+
+      return res.status(200).json({
+        ok: true,
+        id: String(docId),
+        status: status,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('calendar PATCH error:', err?.message || err);
+      return res.status(500).json({ error: 'Failed to update calendar status' });
     }
   }
 
