@@ -22,6 +22,8 @@ module.exports = withLogging(async (req, res) => {
       const toDate = q.to || q.toDate || q.end;
       const status = q.status;
       const category = q.category;
+      const minAdspend = q.minAdspend ? parseInt(q.minAdspend, 10) : null;
+      const maxAdspend = q.maxAdspend ? parseInt(q.maxAdspend, 10) : null;
 
       // Must provide either brandId or organizationId
       if (!brand && !organization) {
@@ -89,6 +91,14 @@ module.exports = withLogging(async (req, res) => {
 
         // Apply category filtering
         if (category && item.category !== category) {
+          includeItem = false;
+        }
+
+        // Apply adspend filtering
+        if (minAdspend !== null && item.adspend < minAdspend) {
+          includeItem = false;
+        }
+        if (maxAdspend !== null && item.adspend > maxAdspend) {
           includeItem = false;
         }
 
