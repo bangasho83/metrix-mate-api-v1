@@ -227,28 +227,29 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
             const impressions = parseInt(metrics.impressions || 0);
             const clicks = parseInt(metrics.clicks || 0);
 
-            // Comprehensive media URL fallback logic
+            // High-resolution media URL resolution
+            // Priority: object_url → image_url → thumbnail_url (avoid CDN-resized thumbnails)
             let mediaUrl = '';
             let thumbnailUrl = creative.thumbnail_url || adcreatives.thumbnail_url || '';
+            let videoId = creative.video_id || adcreatives.video_id || null;
 
-            // Try multiple sources for media URL
-            if (creative.video_id || adcreatives.video_id) {
-              // For videos, prefer thumbnail_url from multiple sources
-              mediaUrl = creative.thumbnail_url ||
-                         adcreatives.thumbnail_url ||
+            if (videoId) {
+              // For videos: use object_url or image_url for high-res thumbnail, avoid low-res thumbnail_url
+              mediaUrl = creative.object_url ||
                          creative.image_url ||
-                         adcreatives.image_url ||
-                         creative.object_url ||
                          adcreatives.object_url ||
+                         adcreatives.image_url ||
+                         creative.thumbnail_url ||
+                         adcreatives.thumbnail_url ||
                          '';
             } else {
-              // For images, try all available image sources
-              mediaUrl = creative.image_url ||
-                         creative.thumbnail_url ||
-                         adcreatives.image_url ||
-                         adcreatives.thumbnail_url ||
-                         creative.object_url ||
+              // For images: prioritize object_url and image_url over thumbnail_url to get full resolution
+              mediaUrl = creative.object_url ||
+                         creative.image_url ||
                          adcreatives.object_url ||
+                         adcreatives.image_url ||
+                         creative.thumbnail_url ||
+                         adcreatives.thumbnail_url ||
                          '';
             }
 
@@ -257,10 +258,13 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
               name: ad.name,
               status: ad.status,
               effective_status: ad.effective_status,
-              format: (creative.video_id || adcreatives.video_id) ? 'video' : 'image',
+              format: videoId ? 'video' : 'image',
               media_url: mediaUrl,
               thumbnail_url: thumbnailUrl,
-              video_id: creative.video_id || adcreatives.video_id || null,
+              video_id: videoId,
+              // For videos, provide the Graph API URL to fetch high-res video source if needed
+              video_source_url: videoId ? `${META_BASE_URL}/${META_API_VERSION}/${videoId}?fields=source` : null,
+              object_story_id: creative.object_story_id || adcreatives.object_story_id || null,
               text: creative.body || adcreatives.body || '',
               headline: creative.title || adcreatives.title || '',
               cta: creative.call_to_action_type || adcreatives.call_to_action_type || '',
@@ -1007,28 +1011,29 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             });
           }
 
-          // Comprehensive media URL fallback logic
+          // High-resolution media URL resolution
+          // Priority: object_url → image_url → thumbnail_url (avoid CDN-resized thumbnails)
           let mediaUrl = '';
           let thumbnailUrl = creative.thumbnail_url || adcreatives.thumbnail_url || '';
+          let videoId = creative.video_id || adcreatives.video_id || null;
 
-          // Try multiple sources for media URL
-          if (creative.video_id || adcreatives.video_id) {
-            // For videos, prefer thumbnail_url from multiple sources
-            mediaUrl = creative.thumbnail_url ||
-                       adcreatives.thumbnail_url ||
+          if (videoId) {
+            // For videos: use object_url or image_url for high-res thumbnail, avoid low-res thumbnail_url
+            mediaUrl = creative.object_url ||
                        creative.image_url ||
-                       adcreatives.image_url ||
-                       creative.object_url ||
                        adcreatives.object_url ||
+                       adcreatives.image_url ||
+                       creative.thumbnail_url ||
+                       adcreatives.thumbnail_url ||
                        '';
           } else {
-            // For images, try all available image sources
-            mediaUrl = creative.image_url ||
-                       creative.thumbnail_url ||
-                       adcreatives.image_url ||
-                       adcreatives.thumbnail_url ||
-                       creative.object_url ||
+            // For images: prioritize object_url and image_url over thumbnail_url to get full resolution
+            mediaUrl = creative.object_url ||
+                       creative.image_url ||
                        adcreatives.object_url ||
+                       adcreatives.image_url ||
+                       creative.thumbnail_url ||
+                       adcreatives.thumbnail_url ||
                        '';
           }
 
@@ -1037,10 +1042,13 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             name: ad.name,
             status: ad.status,
             effective_status: ad.effective_status,
-            format: carouselCards.length > 0 ? 'carousel' : ((creative.video_id || adcreatives.video_id) ? 'video' : 'image'),
+            format: carouselCards.length > 0 ? 'carousel' : (videoId ? 'video' : 'image'),
             media_url: mediaUrl,
             thumbnail_url: thumbnailUrl,
-            video_id: creative.video_id || adcreatives.video_id || null,
+            video_id: videoId,
+            // For videos, provide the Graph API URL to fetch high-res video source if needed
+            video_source_url: videoId ? `${META_BASE_URL}/${META_API_VERSION}/${videoId}?fields=source` : null,
+            object_story_id: creative.object_story_id || adcreatives.object_story_id || null,
             text: creative.body || adcreatives.body || '',
             headline: creative.title || adcreatives.title || '',
             cta: creative.call_to_action_type || adcreatives.call_to_action_type || '',
