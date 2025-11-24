@@ -8,7 +8,7 @@ import { getDefaultDateRange } from '../utils/date-utils.js';
 import { getBrandConnection } from '../services/firebase-service.js';
 import axios from 'axios';
 
-const META_API_VERSION = 'v18.0';
+const META_API_VERSION = 'v24.0';
 const META_BASE_URL = 'https://graph.facebook.com';
 
 const DEFAULT_RESPONSE = {
@@ -25,63 +25,9 @@ const DEFAULT_RESPONSE = {
   }
 };
 
-// Add a function to fetch per-card insights for carousel ads
-async function fetchCarouselCardInsights(adId, from, to, accessToken) {
-  try {
-    if (!accessToken) {
-      throw new Error('Meta access token is required for fetchCarouselCardInsights');
-    }
-
-    // Define timeRange from the request parameters
-    const timeRange = {
-      'since': from,
-      'until': to
-    };
-
-    // First try to get insights with action_carousel_card_id breakdown
-    const response = await axios({
-      method: 'get',
-      url: `${META_BASE_URL}/${META_API_VERSION}/${adId}/insights`,
-      params: {
-        access_token: accessToken,
-        fields: 'inline_link_clicks,outbound_clicks,action_type,action_carousel_card_id',
-        time_range: JSON.stringify(timeRange),
-        breakdowns: 'action_carousel_card_id',
-        level: 'ad'
-      },
-      timeout: 10000
-    });
-
-    if (response.data?.data?.length > 0) {
-      return response.data.data;
-    }
-
-    // If that fails, try to get URL stats
-    const urlResponse = await axios({
-      method: 'get',
-      url: `${META_BASE_URL}/${META_API_VERSION}/${adId}/insights`,
-      params: {
-        access_token: accessToken,
-        fields: 'action_values,action_type,action_destination',
-        time_range: JSON.stringify(timeRange),
-        breakdowns: 'action_destination',
-        level: 'ad'
-      },
-      timeout: 10000
-    });
-
-    return urlResponse.data?.data || [];
-  } catch (error) {
-    console.error(`Error fetching carousel insights for ad ${adId}:`, {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url: error.config?.url,
-      params: error.config?.params
-    });
-    return [];
-  }
-}
+// Note: Per-card carousel insights are no longer supported by Facebook Graph API
+// The action_carousel_card_id breakdown was deprecated
+// We'll estimate clicks based on card position instead
 
 export default async function handler(req, res) {
   // Add CORS headers
@@ -225,7 +171,7 @@ export default async function handler(req, res) {
             try {
               // If image_url is empty, try to fetch it directly from the creative
               let imageUrl = card.image_url;
-              
+
               if (!imageUrl) {
                 try {
                   // Fetch the creative details to get the image URL
@@ -238,7 +184,7 @@ export default async function handler(req, res) {
                     },
                     timeout: 10000
                   });
-                  
+
                   // Extract image URL from the creative response
                   const creative = creativeResponse.data?.creative?.object_story_spec?.link_data?.child_attachments;
                   if (creative && creative[i]) {
@@ -252,48 +198,19 @@ export default async function handler(req, res) {
                   });
                 }
               }
-              
-              // Fetch insights for this specific ad
-              const cardInsights = await fetchCarouselCardInsights(ad.id, fromDate, toDate, metaAccessToken);
-              
-              // Try to match insights to this card
-              let actualClicks = 0;
-              
-              // First try to match by carousel card ID
-              const cardIdMatch = cardInsights.find(insight => 
-                insight.action_carousel_card_id === i.toString() && 
-                (insight.action_type === 'link_click' || insight.action_type === 'onsite_web_click')
-              );
-              
-              if (cardIdMatch) {
-                actualClicks = parseInt(cardIdMatch.value || 0);
-              } else {
-                // If no direct match, try to match by URL/destination
-                const urlMatches = cardInsights.filter(insight => {
-                  if (!insight.action_destination || !processedUrl) return false;
-                  
-                  // Check if the URL in the insight contains the utm_content from this card
-                  return cardUtmContent && 
-                         insight.action_destination.includes(cardUtmContent) && 
-                         (insight.action_type === 'link_click' || insight.action_type === 'onsite_web_click');
-                });
-                
-                if (urlMatches.length > 0) {
-                  actualClicks = urlMatches.reduce((sum, match) => sum + parseInt(match.value || 0), 0);
-                } else {
-                  // Fall back to estimation if no matches found
-                  const totalCards = ad.carousel_cards.length;
-                  const clickShare = totalCards > 0 ? 
-                    (totalCards - i) / (totalCards * (totalCards + 1) / 2) : 0;
-                  actualClicks = Math.round(ad.metrics.clicks * clickShare);
-                }
-              }
-              
+
+              // Estimate clicks based on card position
+              // First cards typically get more clicks (weighted distribution)
+              const totalCards = ad.carousel_cards.length;
+              const clickShare = totalCards > 0 ?
+                (totalCards - i) / (totalCards * (totalCards + 1) / 2) : 0;
+              const estimatedClicks = Math.round(ad.metrics.clicks * clickShare);
+
               processedCards.push({
                 ...card,
                 link_url: processedUrl,
                 image_url: imageUrl,
-                actual_clicks: actualClicks,
+                estimated_clicks: estimatedClicks,
                 utm_content: cardUtmContent
               });
             } catch (error) {
@@ -302,7 +219,7 @@ export default async function handler(req, res) {
               processedCards.push({
                 ...card,
                 link_url: processedUrl,
-                actual_clicks: 0,
+                estimated_clicks: 0,
                 utm_content: cardUtmContent
               });
             }

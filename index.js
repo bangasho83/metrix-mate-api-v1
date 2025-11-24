@@ -30,7 +30,7 @@ const analyticsDataClient = new BetaAnalyticsDataClient({
 });
 
 // Meta API configuration
-const META_API_VERSION = 'v18.0';
+const META_API_VERSION = 'v24.0';
 const META_BASE_URL = 'https://graph.facebook.com';
 
 async function getMetaAdsData() {

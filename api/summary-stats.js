@@ -13,7 +13,7 @@ const { getFacebookPostsCount, getInstagramPostsCount } = require('../services/m
 const { getTossdownSalesData } = require('../services/tossdown-service');
 
 const META_BASE_URL = 'https://graph.facebook.com';
-const META_API_VERSION = 'v18.0';
+const META_API_VERSION = 'v24.0';
 
 // Cache configuration
 const CACHE = {

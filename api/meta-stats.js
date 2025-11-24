@@ -7,7 +7,7 @@ const { getFacebookPosts, getInstagramPosts, getFacebookPostsCount, getInstagram
 const { getDefaultDateRange } = require('../utils/date-utils');
 const { getBrandInfo, getBrandConnection } = require('../services/firebase-service');
 
-const META_API_VERSION = 'v19.0';
+const META_API_VERSION = 'v24.0';
 const META_BASE_URL = 'https://graph.facebook.com';
 
 // Simple cache for API responses

@@ -6,7 +6,7 @@
 const axios = require('axios');
 const { getDefaultDateRange, formatDate, convertToBusinessTimezone, convertDateToBusinessTimezone } = require('../utils/date-utils');
 
-const META_API_VERSION = 'v18.0';
+const META_API_VERSION = 'v24.0';
 const META_BASE_URL = 'https://graph.facebook.com';
 
 /**
