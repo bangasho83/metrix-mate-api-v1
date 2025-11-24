@@ -19,6 +19,7 @@ module.exports = withLogging(async (req, res) => {
       // Support case-insensitive parameter names
       const brand = q.brandId || q.brand_id || q.brand || q.brandid || q.brand_ID;
       const organization = q.organizationId || q.organization_id || q.org || q.organizationid || q.organization_ID;
+      const userId = q.userId || q.user_id || q.userid || q.user_ID;
       const fromDate = q.from || q.fromDate || q.start || q.fromdate || q.from_date;
       const toDate = q.to || q.toDate || q.end || q.todate || q.to_date;
       const status = q.status;
@@ -29,6 +30,44 @@ module.exports = withLogging(async (req, res) => {
       // Must provide either brandId or organizationId
       if (!brand && !organization) {
         return res.status(400).json({ error: 'Missing required parameter: brandId or organizationId' });
+      }
+
+      // If userId is provided, fetch brands the user has access to
+      let userAccessibleBrandIds = null;
+      if (userId) {
+        try {
+          const brandAccessSnap = await db.collection('brandAccess')
+            .where('userId', '==', userId)
+            .where('status', '==', 'Active')
+            .get();
+
+          userAccessibleBrandIds = [];
+          brandAccessSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.brandId) {
+              userAccessibleBrandIds.push(data.brandId);
+            }
+          });
+
+          console.log('Calendar API - User accessible brands:', {
+            userId,
+            brandCount: userAccessibleBrandIds.length,
+            brandIds: userAccessibleBrandIds
+          });
+
+          // If user has no brand access, return empty result
+          if (userAccessibleBrandIds.length === 0) {
+            return res.status(200).json({
+              count: 0,
+              items: [],
+              message: 'User has no active brand access',
+              userId
+            });
+          }
+        } catch (accessError) {
+          console.error('Calendar API - Error fetching brand access:', accessError.message);
+          return res.status(500).json({ error: 'Failed to fetch user brand access' });
+        }
       }
 
       const limitParam = parseInt(q.limit, 10);
@@ -88,11 +127,18 @@ module.exports = withLogging(async (req, res) => {
 
         let includeItem = true;
 
+        // Apply brand access filtering if userId is provided
+        if (userAccessibleBrandIds !== null && item.brandId) {
+          if (!userAccessibleBrandIds.includes(item.brandId)) {
+            includeItem = false;
+          }
+        }
+
         // Apply date filtering (always in memory)
-        if (fromDate && item.date && item.date < fromDate) {
+        if (includeItem && fromDate && item.date && item.date < fromDate) {
           includeItem = false;
         }
-        if (toDate && item.date && item.date > toDate) {
+        if (includeItem && toDate && item.date && item.date > toDate) {
           includeItem = false;
         }
 
@@ -152,6 +198,13 @@ module.exports = withLogging(async (req, res) => {
       // If querying by organizationId, fetch organization and brand details
       let response = { count: items.length, items };
       response[filterType] = filterValue;
+
+      // Add userId to response if provided
+      if (userId) {
+        response.userId = userId;
+        response.filteredByUserAccess = true;
+        response.accessibleBrandCount = userAccessibleBrandIds ? userAccessibleBrandIds.length : 0;
+      }
 
       // Add date range to response if provided
       if (fromDate) response.fromDate = fromDate;
