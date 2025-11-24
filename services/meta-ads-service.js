@@ -207,13 +207,13 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
         });
 
         const adSets = await Promise.all(adSetsResponse.data.data.map(async adSet => {
-          // Get ads for this ad set
+          // Get ads for this ad set with comprehensive fields
           const adsResponse = await axios({
             method: 'get',
             url: `${META_BASE_URL}/${META_API_VERSION}/${adSet.id}/ads`,
             params: {
               access_token: metaAccessToken,
-              fields: 'name,status,creative{id,name,title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec,object_story_id,object_url,object_type,link_url},adcreatives{image_url,thumbnail_url,video_id,object_story_id,object_url,object_type,object_story_spec},insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
+              fields: 'id,name,status,effective_status,created_time,updated_time,creative{id,name,object_type,object_url,image_url,thumbnail_url,video_id,asset_feed_spec,object_story_id,object_story_spec,status,title,body,call_to_action_type,link_url},adcreatives{id,name,object_type,object_url,image_url,thumbnail_url,video_id,object_story_id,object_story_spec,asset_feed_spec,image_hash,title,body,call_to_action_type},insights.time_range(' + JSON.stringify(timeRange) + '){date_start,date_stop,impressions,clicks,spend,cpm,cpc,ctr,reach,frequency,actions,cost_per_conversion,results,cost_per_result}',
               limit: 50
             },
             timeout: 10000
@@ -255,19 +255,31 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
             return {
               id: ad.id,
               name: ad.name,
+              status: ad.status,
+              effective_status: ad.effective_status,
               format: (creative.video_id || adcreatives.video_id) ? 'video' : 'image',
               media_url: mediaUrl,
               thumbnail_url: thumbnailUrl,
               video_id: creative.video_id || adcreatives.video_id || null,
-              text: creative.body || '',
-              headline: creative.title || '',
-              cta: creative.call_to_action_type || '',
+              text: creative.body || adcreatives.body || '',
+              headline: creative.title || adcreatives.title || '',
+              cta: creative.call_to_action_type || adcreatives.call_to_action_type || '',
               destination: creative.link_url || creative.object_story_spec?.link_data?.link || '',
+              created_time: ad.created_time,
+              updated_time: ad.updated_time,
               metrics: {
                 spend: parseFloat(metrics.spend || 0),
                 clicks: clicks,
                 impressions: impressions,
-                ctr: impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0
+                reach: parseInt(metrics.reach || 0),
+                frequency: parseFloat(metrics.frequency || 0),
+                cpm: parseFloat(metrics.cpm || 0),
+                cpc: parseFloat(metrics.cpc || 0),
+                ctr: parseFloat(metrics.ctr || 0) || (impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0),
+                cost_per_conversion: parseFloat(metrics.cost_per_conversion || 0),
+                results: parseInt(metrics.results || 0),
+                cost_per_result: parseFloat(metrics.cost_per_result || 0),
+                actions: metrics.actions || []
               }
             };
           });
@@ -954,7 +966,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
         url: `${META_BASE_URL}/${META_API_VERSION}/${campaignId}/ads`,
         params: {
           access_token: metaAccessToken,
-          fields: 'name,status,adset_id,creative{id,name,title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec{link_data{child_attachments}},object_story_id,object_url,object_type,link_url},adcreatives{image_url,thumbnail_url,video_id,object_story_id,object_url,object_type,object_story_spec},insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
+          fields: 'id,name,status,effective_status,created_time,updated_time,adset_id,creative{id,name,object_type,object_url,image_url,thumbnail_url,video_id,asset_feed_spec,object_story_id,object_story_spec{link_data{child_attachments}},status,title,body,call_to_action_type,link_url},adcreatives{id,name,object_type,object_url,image_url,thumbnail_url,video_id,object_story_id,object_story_spec,asset_feed_spec,image_hash,title,body,call_to_action_type},insights.time_range(' + JSON.stringify(timeRange) + '){date_start,date_stop,impressions,clicks,spend,cpm,cpc,ctr,reach,frequency,actions,cost_per_conversion,results,cost_per_result}',
           limit: 500
         },
         timeout: 15000
@@ -1024,20 +1036,31 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             id: ad.id,
             name: ad.name,
             status: ad.status,
+            effective_status: ad.effective_status,
             format: carouselCards.length > 0 ? 'carousel' : ((creative.video_id || adcreatives.video_id) ? 'video' : 'image'),
             media_url: mediaUrl,
             thumbnail_url: thumbnailUrl,
             video_id: creative.video_id || adcreatives.video_id || null,
-            text: creative.body || '',
-            headline: creative.title || '',
-            cta: creative.call_to_action_type || '',
+            text: creative.body || adcreatives.body || '',
+            headline: creative.title || adcreatives.title || '',
+            cta: creative.call_to_action_type || adcreatives.call_to_action_type || '',
             destination: creative.link_url || creative.object_story_spec?.link_data?.link || '',
             carousel_cards: carouselCards.length > 0 ? carouselCards : undefined,
+            created_time: ad.created_time,
+            updated_time: ad.updated_time,
             metrics: {
               spend: parseFloat(metrics.spend || 0),
               clicks: clicks,
               impressions: impressions,
-              ctr: impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0
+              reach: parseInt(metrics.reach || 0),
+              frequency: parseFloat(metrics.frequency || 0),
+              cpm: parseFloat(metrics.cpm || 0),
+              cpc: parseFloat(metrics.cpc || 0),
+              ctr: parseFloat(metrics.ctr || 0) || (impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0),
+              cost_per_conversion: parseFloat(metrics.cost_per_conversion || 0),
+              results: parseInt(metrics.results || 0),
+              cost_per_result: parseFloat(metrics.cost_per_result || 0),
+              actions: metrics.actions || []
             }
           });
         }
