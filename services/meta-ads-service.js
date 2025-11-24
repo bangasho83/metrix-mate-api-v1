@@ -213,7 +213,7 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
             url: `${META_BASE_URL}/${META_API_VERSION}/${adSet.id}/ads`,
             params: {
               access_token: metaAccessToken,
-              fields: 'name,status,creative{id,name,title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec,link_url},insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
+              fields: 'name,status,creative{id,name,title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec,object_story_id,object_url,object_type,link_url},adcreatives{image_url,thumbnail_url,video_id,object_story_id,object_url,object_type,object_story_spec},insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
               limit: 50
             },
             timeout: 10000
@@ -222,26 +222,43 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
           // Process ads data
           const ads = adsResponse.data.data.map(ad => {
             const creative = ad.creative || {};
+            const adcreatives = ad.adcreatives?.data?.[0] || {};
             const metrics = ad.insights?.data?.[0] || {};
             const impressions = parseInt(metrics.impressions || 0);
             const clicks = parseInt(metrics.clicks || 0);
 
-            // Determine media URL - use thumbnail for videos, image_url for images
-            let mediaUrl = creative.image_url || '';
-            let thumbnailUrl = creative.thumbnail_url || '';
+            // Comprehensive media URL fallback logic
+            let mediaUrl = '';
+            let thumbnailUrl = creative.thumbnail_url || adcreatives.thumbnail_url || '';
 
-            if (creative.video_id) {
-              // For videos, prefer thumbnail_url, fallback to image_url
-              mediaUrl = thumbnailUrl || creative.image_url || '';
+            // Try multiple sources for media URL
+            if (creative.video_id || adcreatives.video_id) {
+              // For videos, prefer thumbnail_url from multiple sources
+              mediaUrl = creative.thumbnail_url ||
+                         adcreatives.thumbnail_url ||
+                         creative.image_url ||
+                         adcreatives.image_url ||
+                         creative.object_url ||
+                         adcreatives.object_url ||
+                         '';
+            } else {
+              // For images, try all available image sources
+              mediaUrl = creative.image_url ||
+                         creative.thumbnail_url ||
+                         adcreatives.image_url ||
+                         adcreatives.thumbnail_url ||
+                         creative.object_url ||
+                         adcreatives.object_url ||
+                         '';
             }
 
             return {
               id: ad.id,
               name: ad.name,
-              format: creative.video_id ? 'video' : 'image',
+              format: (creative.video_id || adcreatives.video_id) ? 'video' : 'image',
               media_url: mediaUrl,
               thumbnail_url: thumbnailUrl,
-              video_id: creative.video_id || null,
+              video_id: creative.video_id || adcreatives.video_id || null,
               text: creative.body || '',
               headline: creative.title || '',
               cta: creative.call_to_action_type || '',
@@ -937,7 +954,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
         url: `${META_BASE_URL}/${META_API_VERSION}/${campaignId}/ads`,
         params: {
           access_token: metaAccessToken,
-          fields: 'name,status,adset_id,creative{id,name,title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec{link_data{child_attachments}},link_url},insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
+          fields: 'name,status,adset_id,creative{id,name,title,body,image_url,thumbnail_url,video_id,call_to_action_type,object_story_spec{link_data{child_attachments}},object_story_id,object_url,object_type,link_url},adcreatives{image_url,thumbnail_url,video_id,object_story_id,object_url,object_type,object_story_spec},insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
           limit: 500
         },
         timeout: 15000
@@ -960,6 +977,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
           }
 
           const creative = ad.creative || {};
+          const adcreatives = ad.adcreatives?.data?.[0] || {};
           const metrics = ad.insights?.data?.[0] || {};
           const impressions = parseInt(metrics.impressions || 0);
           const clicks = parseInt(metrics.clicks || 0);
@@ -977,23 +995,39 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             });
           }
 
-          // Determine media URL - use thumbnail for videos, image_url for images
-          let mediaUrl = creative.image_url || '';
-          let thumbnailUrl = creative.thumbnail_url || '';
+          // Comprehensive media URL fallback logic
+          let mediaUrl = '';
+          let thumbnailUrl = creative.thumbnail_url || adcreatives.thumbnail_url || '';
 
-          if (creative.video_id) {
-            // For videos, prefer thumbnail_url, fallback to image_url
-            mediaUrl = thumbnailUrl || creative.image_url || '';
+          // Try multiple sources for media URL
+          if (creative.video_id || adcreatives.video_id) {
+            // For videos, prefer thumbnail_url from multiple sources
+            mediaUrl = creative.thumbnail_url ||
+                       adcreatives.thumbnail_url ||
+                       creative.image_url ||
+                       adcreatives.image_url ||
+                       creative.object_url ||
+                       adcreatives.object_url ||
+                       '';
+          } else {
+            // For images, try all available image sources
+            mediaUrl = creative.image_url ||
+                       creative.thumbnail_url ||
+                       adcreatives.image_url ||
+                       adcreatives.thumbnail_url ||
+                       creative.object_url ||
+                       adcreatives.object_url ||
+                       '';
           }
 
           adsByAdSetId[ad.adset_id].push({
             id: ad.id,
             name: ad.name,
             status: ad.status,
-            format: carouselCards.length > 0 ? 'carousel' : (creative.video_id ? 'video' : 'image'),
+            format: carouselCards.length > 0 ? 'carousel' : ((creative.video_id || adcreatives.video_id) ? 'video' : 'image'),
             media_url: mediaUrl,
             thumbnail_url: thumbnailUrl,
-            video_id: creative.video_id || null,
+            video_id: creative.video_id || adcreatives.video_id || null,
             text: creative.body || '',
             headline: creative.title || '',
             cta: creative.call_to_action_type || '',
