@@ -62,6 +62,34 @@ async function saveGeneratedImagesToFirestore({
 
 
 const { withLogging } = require('../utils/logging.cjs.js');
+const metronomeService = require('../services/metronome-service');
+
+// Helper: Get billingCustomerId from organization with caching
+const BILLING_CACHE = { data: {}, ts: {}, TTL: 15 * 60 * 1000 };
+async function getBillingCustomerId(organizationId) {
+  if (!organizationId) return undefined;
+  const now = Date.now();
+  const cached = BILLING_CACHE.data[organizationId];
+  const ts = BILLING_CACHE.ts[organizationId];
+  if (cached !== undefined && ts && (now - ts < BILLING_CACHE.TTL)) {
+    return cached;
+  }
+  try {
+    const orgDoc = await db.collection('orgs').doc(organizationId).get();
+    if (orgDoc.exists) {
+      const billingId = orgDoc.data()?.billingCustomerId || null;
+      BILLING_CACHE.data[organizationId] = billingId;
+      BILLING_CACHE.ts[organizationId] = now;
+      return billingId;
+    }
+    BILLING_CACHE.data[organizationId] = null;
+    BILLING_CACHE.ts[organizationId] = now;
+    return undefined;
+  } catch (e) {
+    console.error('[image-gen] Failed to fetch billingCustomerId:', e?.message);
+    return undefined;
+  }
+}
 
 module.exports = withLogging(async (req, res) => {
   // CORS headers
@@ -400,6 +428,97 @@ module.exports = withLogging(async (req, res) => {
           }
         }), 45000, 'fal nano-banana t2i'
       );
+    } else if (modelKey === 'banana-pro-text') {
+      // Nano Banana Pro Text to Image model
+      const outFmt = (output_format || outputFormat || 'png').toLowerCase();
+      const validFmt = outFmt === 'png' ? 'png' : 'jpeg';
+      const num = parseInt(num_images ?? numImages ?? 1, 10);
+      const safeNum = Math.min(Math.max(isNaN(num) ? 1 : num, 1), 4);
+      const resolution = (body.resolution || '1K').toUpperCase();
+      const validResolutions = ['1K', '2K', '4K'];
+      const safeResolution = validResolutions.includes(resolution) ? resolution : '1K';
+
+      const falPayload = {
+        input: {
+          prompt: effectivePrompt,
+          num_images: safeNum,
+          output_format: validFmt,
+          aspect_ratio: safeAspect,
+          resolution: safeResolution
+        },
+        logs: Boolean(logs)
+      };
+
+      console.log('\n📤 FAL.AI API REQUEST - Nano Banana Pro Text-to-Image:');
+      console.log('========================================================');
+      console.log('Model: fal-ai/nano-banana-pro');
+      console.log('Payload:', JSON.stringify(falPayload, null, 2));
+      console.log('========================================================\n');
+
+      result = await withTimeout(
+        fal.subscribe('fal-ai/nano-banana-pro', {
+          ...falPayload,
+          onQueueUpdate: (update) => {
+            if (update.status === 'IN_PROGRESS') {
+              update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
+            }
+          }
+        }), 60000, 'fal nano-banana-pro t2i'
+      );
+    } else if (modelKey === 'banana-pro-image') {
+      // Nano Banana Pro Image to Image editing model
+      const urls = Array.isArray(image_urls) ? image_urls : (Array.isArray(imageUrls) ? imageUrls : []);
+      const normalizedUrls = urls.filter(u => typeof u === 'string' && u.trim()).map(u => u.trim());
+      if (normalizedUrls.length === 0) {
+        return res.status(400).json({ error: 'Missing required field: image_urls (array of URLs) for banana-pro-image model' });
+      }
+
+      // Validate image URLs are accessible
+      for (const url of normalizedUrls) {
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          return res.status(400).json({
+            error: 'Invalid image URL format. URLs must start with http:// or https://',
+            invalidUrl: url
+          });
+        }
+      }
+
+      const outFmt = (output_format || outputFormat || 'png').toLowerCase();
+      const validFmt = outFmt === 'png' ? 'png' : 'jpeg';
+      const num = parseInt(num_images ?? numImages ?? 1, 10);
+      const safeNum = Math.min(Math.max(isNaN(num) ? 1 : num, 1), 4);
+      const resolution = (body.resolution || '1K').toUpperCase();
+      const validResolutions = ['1K', '2K', '4K'];
+      const safeResolution = validResolutions.includes(resolution) ? resolution : '1K';
+
+      const falPayload = {
+        input: {
+          prompt: effectivePrompt,
+          image_urls: normalizedUrls,
+          num_images: safeNum,
+          output_format: validFmt,
+          aspect_ratio: safeAspect,
+          resolution: safeResolution
+        },
+        logs: Boolean(logs)
+      };
+
+      console.log('\n📤 FAL.AI API REQUEST - Nano Banana Pro Edit:');
+      console.log('===============================================');
+      console.log('Model: fal-ai/nano-banana-pro/edit');
+      console.log('Payload:', JSON.stringify(falPayload, null, 2));
+      console.log('===============================================\n');
+
+      result = await withTimeout(
+        fal.subscribe('fal-ai/nano-banana-pro/edit', {
+          ...falPayload,
+          onQueueUpdate: (update) => {
+            if (update.status === 'IN_PROGRESS') {
+              update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
+            }
+          }
+        }), 60000, 'fal nano-banana-pro edit'
+      );
     } else {
       // Default to Imagen 4 text-to-image
       // Imagen4 only supports: 1:1, 16:9, 9:16, 3:4, 4:3
@@ -458,7 +577,9 @@ module.exports = withLogging(async (req, res) => {
     // Persist to Firestore creativeGen
     const modelNameForSave = (modelKey === 'flux-kontext') ? 'Flux-kontext' :
       (modelKey === 'banana-image' || modelKey === 'nano-banana') ? 'Nano Banana Edit' :
-      (modelKey === 'banana-text') ? 'Nano Banana' : 'Imagen4';
+      (modelKey === 'banana-text') ? 'Nano Banana' :
+      (modelKey === 'banana-pro-text') ? 'Nano Banana Pro' :
+      (modelKey === 'banana-pro-image') ? 'Nano Banana Pro Edit' : 'Imagen4';
 
     const metaForSave = {
       aspectRatio: aspect_ratio ?? aspectRatio ?? null,
@@ -475,15 +596,53 @@ module.exports = withLogging(async (req, res) => {
     const itemsForSave = (data.images || []).map((img, idx) => ({ ...img, index: idx }));
     await saveGeneratedImagesToFirestore({ db, items: itemsForSave, metadata: metaForSave });
 
+    // Determine credits based on model type (pro models cost more)
+    const isProModel = modelKey === 'banana-pro-text' || modelKey === 'banana-pro-image';
+    const creditsPerImage = isProModel ? 50 : 25; // image-gen-pro=50, image-gen=25
+    const totalCredits = creditsPerImage * (data.images?.length || 1);
+
+    // Ingest billing event to Metronome if organizationId is present
+    if (bodyOrgId && totalCredits > 0) {
+      try {
+        const billingCustomerId = await getBillingCustomerId(bodyOrgId);
+        if (billingCustomerId) {
+          const eventType = isProModel ? 'image-gen-pro' : 'image-gen';
+          const properties = {
+            credits: totalCredits,
+            project_id: 'metrixmate',
+            organization_id: bodyOrgId
+          };
+          if (bodyBrandId) properties.brand_id = bodyBrandId;
+          if (bodyUserId) properties.user_id = bodyUserId;
+          if (modelNameForSave) properties.model = modelNameForSave;
+          if (safeNumImages) properties.num_images = safeNumImages;
+
+          console.log(`[image-gen] Ingesting ${totalCredits} credits to Metronome for ${eventType}`);
+          await metronomeService.ingestEvent({
+            organization_id: bodyOrgId,
+            customer_id: billingCustomerId,
+            event_type: eventType,
+            timestamp: null,
+            properties
+          });
+          console.log(`[image-gen] Successfully ingested billing event for ${eventType}`);
+        } else {
+          console.log('[image-gen] No billingCustomerId found, skipping Metronome ingest');
+        }
+      } catch (billingError) {
+        console.error('[image-gen] Failed to ingest billing event:', billingError?.message);
+        // Don't fail the request if billing fails
+      }
+    }
+
     // Respond with minimal, useful payload
     return res.status(200).json({
       images: data.images, // [{ url }]
       seed: data.seed,
-      requestId
+      requestId,
+      credits: totalCredits,
+      model: modelNameForSave
     });
-
-// Increase Vercel Serverless Function timeout to 60s for long-running generations
-module.exports.config = { maxDuration: 60 };
 
   } catch (err) {
     // Enhanced error logging for debugging

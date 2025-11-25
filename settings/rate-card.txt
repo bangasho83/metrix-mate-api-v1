@@ -1,4 +1,5 @@
 image-gen=25
+image-gen-pro=50
 site-audit=300
 html-scraper=10
 keyword-sim=100
