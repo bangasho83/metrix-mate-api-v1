@@ -8,8 +8,8 @@
 let fal; // will resolve lazily inside handler if needed
 const { db } = require('../services/firebase-service');
 
-// Vercel function timeout (60s)
-module.exports.config = { maxDuration: 60 };
+// Vercel function timeout (180s for high-resolution image generation)
+module.exports.config = { maxDuration: 180 };
 
 // Helper: timeout wrapper for long-running external calls
 function withTimeout(promise, ms, label = 'operation') {
@@ -339,7 +339,7 @@ module.exports = withLogging(async (req, res) => {
               update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
             }
           }
-        }), 45000, 'fal flux-kontext'
+        }), 150000, 'fal flux-kontext'
       );
     } else if (modelKey === 'banana-image' || modelKey === 'nano-banana') {
       // Nano Banana Image to Image editing model
@@ -349,12 +349,20 @@ module.exports = withLogging(async (req, res) => {
         return res.status(400).json({ error: 'Missing required field: image_urls (array of URLs) for banana-image model' });
       }
 
-      // Validate image URLs are accessible
+      // Validate image URLs are accessible and not placeholder URLs
       for (const url of normalizedUrls) {
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           return res.status(400).json({
             error: 'Invalid image URL format. URLs must start with http:// or https://',
             invalidUrl: url
+          });
+        }
+        // Reject placeholder URLs
+        if (url.includes('placeholder') || url.includes('text=undefined')) {
+          return res.status(400).json({
+            error: 'Invalid image URL: placeholder or undefined URLs are not allowed',
+            invalidUrl: url,
+            message: 'Please provide valid image URLs pointing to actual images'
           });
         }
       }
@@ -391,7 +399,7 @@ module.exports = withLogging(async (req, res) => {
               update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
             }
           }
-        }), 45000, 'fal nano-banana edit'
+        }), 150000, 'fal nano-banana edit'
       );
     } else if (modelKey === 'banana-text') {
       // Nano Banana Text to Image model
@@ -426,7 +434,7 @@ module.exports = withLogging(async (req, res) => {
               update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
             }
           }
-        }), 45000, 'fal nano-banana t2i'
+        }), 150000, 'fal nano-banana t2i'
       );
     } else if (modelKey === 'banana-pro-text') {
       // Nano Banana Pro Text to Image model
@@ -463,7 +471,7 @@ module.exports = withLogging(async (req, res) => {
               update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
             }
           }
-        }), 60000, 'fal nano-banana-pro t2i'
+        }), 150000, 'fal nano-banana-pro t2i'
       );
     } else if (modelKey === 'banana-pro-image') {
       // Nano Banana Pro Image to Image editing model
@@ -473,12 +481,20 @@ module.exports = withLogging(async (req, res) => {
         return res.status(400).json({ error: 'Missing required field: image_urls (array of URLs) for banana-pro-image model' });
       }
 
-      // Validate image URLs are accessible
+      // Validate image URLs are accessible and not placeholder URLs
       for (const url of normalizedUrls) {
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           return res.status(400).json({
             error: 'Invalid image URL format. URLs must start with http:// or https://',
             invalidUrl: url
+          });
+        }
+        // Reject placeholder URLs
+        if (url.includes('placeholder') || url.includes('text=undefined')) {
+          return res.status(400).json({
+            error: 'Invalid image URL: placeholder or undefined URLs are not allowed',
+            invalidUrl: url,
+            message: 'Please provide valid image URLs pointing to actual images'
           });
         }
       }
@@ -517,7 +533,7 @@ module.exports = withLogging(async (req, res) => {
               update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
             }
           }
-        }), 60000, 'fal nano-banana-pro edit'
+        }), 150000, 'fal nano-banana-pro edit'
       );
     } else {
       // Default to Imagen 4 text-to-image
@@ -557,7 +573,7 @@ module.exports = withLogging(async (req, res) => {
               update.logs?.map((l) => l.message).forEach((m) => console.log('[FAL]', m));
             }
           }
-        }), 45000, 'fal imagen4'
+        }), 150000, 'fal imagen4'
       );
     }
 
