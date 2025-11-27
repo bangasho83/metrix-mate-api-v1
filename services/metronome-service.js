@@ -909,6 +909,19 @@ async function topUpCredits(customer_id, contract_id, amountInCents) {
       ]
     };
 
+    // 🔍 LOG CURL COMMAND
+    const curlCommand = `curl -X POST '${METRONOME_API_V2_URL}/contracts/edit' \\
+  -H 'Authorization: Bearer ${METRONOME_API_KEY}' \\
+  -H 'Content-Type: application/json' \\
+  -d '${JSON.stringify(payload, null, 2)}'`;
+
+    console.log('\n========== METRONOME TOP-UP REQUEST ==========');
+    console.log('📤 CURL COMMAND:');
+    console.log(curlCommand);
+    console.log('\n📦 PAYLOAD:');
+    console.log(JSON.stringify(payload, null, 2));
+    console.log('==============================================\n');
+
     const response = await axios.post(
       `${METRONOME_API_V2_URL}/contracts/edit`,
       payload,
@@ -921,6 +934,13 @@ async function topUpCredits(customer_id, contract_id, amountInCents) {
       }
     );
 
+    // 🔍 LOG RESPONSE
+    console.log('\n========== METRONOME TOP-UP RESPONSE ==========');
+    console.log('✅ STATUS:', response.status);
+    console.log('📥 RESPONSE DATA:');
+    console.log(JSON.stringify(response.data, null, 2));
+    console.log('===============================================\n');
+
     return {
       success: true,
       data: response.data?.data || response.data,
@@ -931,7 +951,13 @@ async function topUpCredits(customer_id, contract_id, amountInCents) {
     };
 
   } catch (error) {
-    console.error('Metronome topUpCredits error:', {
+    // 🔍 LOG ERROR RESPONSE
+    console.error('\n========== METRONOME TOP-UP ERROR ==========');
+    console.error('❌ ERROR MESSAGE:', error.message);
+    console.error('❌ STATUS:', error.response?.status);
+    console.error('❌ RESPONSE DATA:');
+    console.error(JSON.stringify(error.response?.data, null, 2));
+    console.error('❌ FULL ERROR:', {
       message: error.message,
       status: error.response?.status,
       data: error.response?.data,
@@ -939,6 +965,7 @@ async function topUpCredits(customer_id, contract_id, amountInCents) {
       contract_id,
       amount_cents: amountInCents
     });
+    console.error('============================================\n');
 
     return {
       success: false,
