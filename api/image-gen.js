@@ -617,6 +617,17 @@ module.exports = withLogging(async (req, res) => {
     const creditsPerImage = isProModel ? 50 : 25; // image-gen-pro=50, image-gen=25
     const totalCredits = creditsPerImage * (data.images?.length || 1);
 
+    // 🔍 DETAILED BILLING CALCULATION LOG
+    console.log('\n========== IMAGE-GEN BILLING CALCULATION ==========');
+    console.log('📊 Model Key:', modelKey);
+    console.log('📊 Model Name (for save):', modelNameForSave);
+    console.log('📊 Is Pro Model:', isProModel);
+    console.log('📊 Credits Per Image:', creditsPerImage);
+    console.log('📊 Number of Images Generated:', data.images?.length || 0);
+    console.log('📊 Total Credits to Charge:', totalCredits);
+    console.log('📊 Event Type:', isProModel ? 'image-gen-pro' : 'image-gen');
+    console.log('===================================================\n');
+
     // Ingest billing event to Metronome if organizationId is present
     if (bodyOrgId && totalCredits > 0) {
       try {
@@ -633,7 +644,14 @@ module.exports = withLogging(async (req, res) => {
           if (modelNameForSave) properties.model = modelNameForSave;
           if (safeNumImages) properties.num_images = safeNumImages;
 
-          console.log(`[image-gen] Ingesting ${totalCredits} credits to Metronome for ${eventType}`);
+          console.log('\n========== METRONOME BILLING INGEST ==========');
+          console.log('📤 Event Type:', eventType);
+          console.log('📤 Customer ID:', billingCustomerId);
+          console.log('📤 Organization ID:', bodyOrgId);
+          console.log('📤 Total Credits:', totalCredits);
+          console.log('📤 Properties:', JSON.stringify(properties, null, 2));
+          console.log('==============================================\n');
+
           await metronomeService.ingestEvent({
             organization_id: bodyOrgId,
             customer_id: billingCustomerId,
@@ -641,12 +659,13 @@ module.exports = withLogging(async (req, res) => {
             timestamp: null,
             properties
           });
-          console.log(`[image-gen] Successfully ingested billing event for ${eventType}`);
+
+          console.log(`✅ [image-gen] Successfully ingested ${totalCredits} credits for ${eventType} (model: ${modelNameForSave})`);
         } else {
-          console.log('[image-gen] No billingCustomerId found, skipping Metronome ingest');
+          console.log('⚠️ [image-gen] No billingCustomerId found, skipping Metronome ingest');
         }
       } catch (billingError) {
-        console.error('[image-gen] Failed to ingest billing event:', billingError?.message);
+        console.error('❌ [image-gen] Failed to ingest billing event:', billingError?.message);
         // Don't fail the request if billing fails
       }
     }

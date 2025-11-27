@@ -468,6 +468,22 @@ async function ingestEvent({
       }
     ];
 
+    // 🔍 LOG INGEST REQUEST
+    const curlCommand = `curl -X POST '${METRONOME_API_URL}/ingest' \\
+  -H 'Authorization: Bearer ${METRONOME_API_KEY}' \\
+  -H 'Content-Type: application/json' \\
+  -d '${JSON.stringify(payload, null, 2)}'`;
+
+    console.log('\n========== METRONOME INGEST REQUEST ==========');
+    console.log('📤 CURL COMMAND:');
+    console.log(curlCommand);
+    console.log('\n📦 PAYLOAD:');
+    console.log(JSON.stringify(payload, null, 2));
+    console.log('📊 Event Type:', normalized_event_type);
+    console.log('📊 Credits:', properties.credits);
+    console.log('📊 Customer ID:', customer_id);
+    console.log('==============================================\n');
+
     // Make API request to Metronome ingest endpoint
     const response = await axios.post(
       `${METRONOME_API_URL}/ingest`,
@@ -481,7 +497,12 @@ async function ingestEvent({
       }
     );
 
-
+    // 🔍 LOG INGEST RESPONSE
+    console.log('\n========== METRONOME INGEST RESPONSE ==========');
+    console.log('✅ STATUS:', response.status);
+    console.log('📥 RESPONSE DATA:');
+    console.log(JSON.stringify(response.data, null, 2));
+    console.log('===============================================\n');
 
     return {
       success: true,
@@ -493,7 +514,14 @@ async function ingestEvent({
     };
 
   } catch (error) {
-    console.error('Metronome ingestEvent error:', {
+    // 🔍 LOG INGEST ERROR
+    console.error('\n========== METRONOME INGEST ERROR ==========');
+    console.error('❌ ERROR MESSAGE:', error.message);
+    console.error('❌ STATUS:', error.response?.status);
+    console.error('❌ STATUS TEXT:', error.response?.statusText);
+    console.error('❌ RESPONSE DATA:');
+    console.error(JSON.stringify(error.response?.data, null, 2));
+    console.error('❌ FULL ERROR:', {
       message: error.message,
       status: error.response?.status,
       statusText: error.response?.statusText,
@@ -502,6 +530,7 @@ async function ingestEvent({
       customer_id,
       event_type
     });
+    console.error('============================================\n');
 
     // Return structured error
     return {
