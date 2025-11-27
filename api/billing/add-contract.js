@@ -130,7 +130,7 @@ module.exports = async (req, res) => {
             unit_price: 5000,
             quantity: 1
           },
-          priority: 0,
+          priority: 1,
           recurrence_frequency: 'MONTHLY',
           commit_duration: {
             value: 1,

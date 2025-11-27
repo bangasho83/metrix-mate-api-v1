@@ -42,7 +42,7 @@ const METRONOME_IDS = {
 const FREE_TRIAL_CONFIG = {
   CREDITS: parseInt(process.env.METRONOME_FREE_TRIAL_CREDITS) || 500,
   DURATION_YEARS: parseFloat(process.env.METRONOME_FREE_TRIAL_DURATION_YEARS) || 1,
-  PRIORITY: 1,
+  PRIORITY: 0,
   NAME: 'Free Trial Credits'
 };
 
