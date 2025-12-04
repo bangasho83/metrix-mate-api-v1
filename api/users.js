@@ -17,6 +17,7 @@ module.exports = withLogging(async (req, res) => {
     const q = req.query || {};
     const uid = q.uid || q.userId || q.user_id;
     const organization = q.organizationId || q.organization_id || q.org;
+    const brandId = q.brandId || q.brand_id;
 
     // Helper function to format Firestore timestamp to readable format
     const formatTimestamp = (timestamp) => {
@@ -116,7 +117,88 @@ module.exports = withLogging(async (req, res) => {
 
     let queryRef;
     let snapshot;
+    let users = [];
 
+    // NEW: Filter by brandId using brandAccess collection
+    if (brandId) {
+      console.log('Users API - Filtering by brandId:', brandId);
+
+      // Step 1: Get all brandAccess records for this brand
+      const brandAccessSnap = await db.collection('brandAccess')
+        .where('brandId', '==', brandId)
+        .where('status', '==', 'Active')
+        .get();
+
+      const userIds = [];
+      brandAccessSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.userId) {
+          userIds.push(data.userId);
+        }
+      });
+
+      console.log('Users API - Found brand access records:', {
+        brandId,
+        userCount: userIds.length,
+        userIds
+      });
+
+      // If no users have access to this brand, return empty result
+      if (userIds.length === 0) {
+        return res.status(200).json({
+          count: 0,
+          users: [],
+          brandId,
+          message: 'No active users found for this brand'
+        });
+      }
+
+      // Step 2: Fetch user details for each userId
+      // Note: Firestore doesn't support 'in' queries with more than 10 items,
+      // so we need to batch the queries or fetch individually
+      const userPromises = userIds.slice(0, lim).map(async (userId) => {
+        try {
+          const userDoc = await db.collection('users').doc(userId).get();
+          if (userDoc.exists) {
+            const d = userDoc.data() || {};
+            return {
+              uid: d.uid || userDoc.id,
+              email: d.email || null,
+              name: d.name || null,
+              avatarUrl: d.avatarUrl || null,
+              organizationId: d.organizationId || null,
+              role: d.role || null,
+              status: d.status || null,
+              lastLoginAt: formatTimestamp(d.lastLoginAt),
+              createdAt: formatTimestamp(d.createdAt),
+              updatedAt: formatTimestamp(d.updatedAt)
+            };
+          }
+          return null;
+        } catch (error) {
+          console.warn('Failed to fetch user:', userId, error.message);
+          return null;
+        }
+      });
+
+      const fetchedUsers = await Promise.all(userPromises);
+      users = fetchedUsers.filter(u => u !== null);
+
+      console.log('Users API - Fetched user details:', {
+        brandId,
+        requestedCount: userIds.length,
+        fetchedCount: users.length
+      });
+
+      return res.status(200).json({
+        count: users.length,
+        users,
+        brandId,
+        totalBrandAccessRecords: userIds.length
+      });
+    }
+
+    // EXISTING: Filter by organizationId
     if (organization) {
       // Filter by organizationId with lastLoginAt ordering
       try {
@@ -154,7 +236,6 @@ module.exports = withLogging(async (req, res) => {
       }
     }
 
-    const users = [];
     snapshot.forEach(doc => {
       const d = doc.data() || {};
       users.push({
