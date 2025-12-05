@@ -18,6 +18,7 @@ module.exports = withLogging(async (req, res) => {
     const uid = q.uid || q.userId || q.user_id;
     const organization = q.organizationId || q.organization_id || q.org;
     const brandId = q.brandId || q.brand_id;
+    const statusFilter = q.status; // Filter by user status (e.g., 'active', 'inactive')
 
     // Helper function to format Firestore timestamp to readable format
     const formatTimestamp = (timestamp) => {
@@ -184,17 +185,30 @@ module.exports = withLogging(async (req, res) => {
       const fetchedUsers = await Promise.all(userPromises);
       users = fetchedUsers.filter(u => u !== null);
 
+      // Apply status filter if provided
+      if (statusFilter) {
+        const beforeFilterCount = users.length;
+        users = users.filter(u => u.status === statusFilter);
+        console.log('Users API - Applied status filter:', {
+          statusFilter,
+          beforeCount: beforeFilterCount,
+          afterCount: users.length
+        });
+      }
+
       console.log('Users API - Fetched user details:', {
         brandId,
         requestedCount: userIds.length,
-        fetchedCount: users.length
+        fetchedCount: users.length,
+        statusFilter: statusFilter || 'none'
       });
 
       return res.status(200).json({
         count: users.length,
         users,
         brandId,
-        totalBrandAccessRecords: userIds.length
+        totalBrandAccessRecords: userIds.length,
+        ...(statusFilter && { statusFilter })
       });
     }
 
@@ -238,6 +252,12 @@ module.exports = withLogging(async (req, res) => {
 
     snapshot.forEach(doc => {
       const d = doc.data() || {};
+
+      // Apply status filter if provided
+      if (statusFilter && d.status !== statusFilter) {
+        return; // Skip this user
+      }
+
       users.push({
         uid: d.uid || doc.id,
         email: d.email || null,
@@ -259,6 +279,10 @@ module.exports = withLogging(async (req, res) => {
 
     if (organization) {
       response.organizationId = organization;
+    }
+
+    if (statusFilter) {
+      response.statusFilter = statusFilter;
     }
 
     return res.status(200).json(response);
