@@ -33,8 +33,51 @@ export default withLogging(async function handler(req, res) {
       });
     }
 
-    // Call the DataForSEO service
-    const result = await getKeywordSearchVolume({ keywords, location_code, language_code });
+    // Process keywords to handle priority markers (*)
+    // Create mapping to preserve original keywords with * prefix
+    const keywordMapping = keywords.map(kw => {
+      const keywordStr = String(kw).trim();
+      const isPriority = keywordStr.startsWith('*');
+      const cleanKeyword = isPriority ? keywordStr.substring(1).trim() : keywordStr;
+
+      return {
+        original: keywordStr,
+        clean: cleanKeyword,
+        isPriority: isPriority
+      };
+    });
+
+    // Extract clean keywords for DataForSEO API
+    const cleanKeywords = keywordMapping.map(k => k.clean);
+
+    console.log('[Keyword Research] Processing keywords:', {
+      total: keywords.length,
+      priority: keywordMapping.filter(k => k.isPriority).length,
+      regular: keywordMapping.filter(k => !k.isPriority).length,
+      originalKeywords: keywords,
+      cleanKeywords: cleanKeywords
+    });
+
+    // Call the DataForSEO service with clean keywords
+    const result = await getKeywordSearchVolume({
+      keywords: cleanKeywords,
+      location_code,
+      language_code
+    });
+
+    // Enhance results with priority information
+    if (result && result.result && Array.isArray(result.result)) {
+      result.result = result.result.map(item => {
+        // Find the mapping for this keyword
+        const mapping = keywordMapping.find(k => k.clean === item.keyword);
+
+        return {
+          ...item,
+          original_keyword: mapping?.original || item.keyword,
+          is_priority: mapping?.isPriority || false
+        };
+      });
+    }
 
     // Set cache headers: 24 hours by default, or no-store if cache=0
     if (cache === 0) {
@@ -43,7 +86,7 @@ export default withLogging(async function handler(req, res) {
       res.setHeader('Cache-Control', 'private, max-age=86400'); // 24 hours
     }
 
-    // Return the result
+    // Return the enhanced result
     return res.status(200).json(result);
   } catch (error) {
     console.error('Error in Keyword Research API:', error.message, error.stack);
