@@ -18,6 +18,7 @@ exports.createMoodboardItem = async (data) => {
       creativeGuideline,
       imageUrl,
       model,
+      note,
       organizationId,
       userId
     } = data;
@@ -46,6 +47,7 @@ exports.createMoodboardItem = async (data) => {
       creativeGuideline: creativeGuideline || '',
       imageUrl,
       model: model || null,
+      note: note || '',
       organizationId,
       userId: userId || null
     });

@@ -42,6 +42,7 @@ module.exports = withLogging(async (req, res) => {
         creativeGuideline,
         imageUrl,
         model,
+        note,
         organizationId,
         userId
       } = req.body;
@@ -61,6 +62,7 @@ module.exports = withLogging(async (req, res) => {
         creativeGuideline,
         imageUrl,
         model,
+        note,
         organizationId,
         userId
       });
