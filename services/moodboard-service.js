@@ -81,6 +81,13 @@ exports.getMoodboardItems = async (filters = {}) => {
     } = filters;
 
     console.log('Moodboard Service - Fetching items with filters:', filters);
+    console.log('Moodboard Service - Query details:', {
+      brandId: brandId || 'not provided',
+      organizationId: organizationId || 'not provided',
+      userId: userId || 'not provided',
+      model: model || 'not provided',
+      limit
+    });
 
     let query = db.collection('moodboard');
     let useOrderBy = true;
@@ -92,15 +99,18 @@ exports.getMoodboardItems = async (filters = {}) => {
 
     // If both brandId and organizationId are provided, use composite index
     if (brandId && organizationId) {
+      console.log('Moodboard Service - Using composite index: brandId + organizationId');
       query = query.where('brandId', '==', brandId);
       query = query.where('organizationId', '==', organizationId);
     }
     // If only organizationId, use it
     else if (organizationId) {
+      console.log('Moodboard Service - Using organizationId filter only');
       query = query.where('organizationId', '==', organizationId);
     }
     // If only brandId, we need to fetch all and filter in-memory
     else if (brandId) {
+      console.log('Moodboard Service - Using brandId filter only (no orderBy)');
       query = query.where('brandId', '==', brandId);
       useOrderBy = false; // Skip orderBy to avoid index requirement
     }
@@ -124,11 +134,20 @@ exports.getMoodboardItems = async (filters = {}) => {
     // Apply limit
     query = query.limit(limit * 2); // Fetch more since we might filter in-memory
 
+    console.log('Moodboard Service - Executing query...');
     const snapshot = await query.get();
+    console.log('Moodboard Service - Query returned documents:', snapshot.size);
 
     let items = [];
     snapshot.forEach(doc => {
       const data = doc.data();
+      console.log('Moodboard Service - Document:', {
+        id: doc.id,
+        brandId: data.brandId,
+        organizationId: data.organizationId,
+        hasCreatedAt: !!data.createdAt
+      });
+
       // Convert Firestore timestamp to ISO string
       const createdAt = data.createdAt && typeof data.createdAt.toDate === 'function'
         ? data.createdAt.toDate().toISOString()
@@ -140,6 +159,8 @@ exports.getMoodboardItems = async (filters = {}) => {
         createdAt
       });
     });
+
+    console.log('Moodboard Service - Items before sorting:', items.length);
 
     // If we didn't use orderBy, sort in-memory
     if (!useOrderBy) {
@@ -153,7 +174,7 @@ exports.getMoodboardItems = async (filters = {}) => {
     // Apply limit after sorting
     items = items.slice(0, limit);
 
-    console.log('Moodboard Service - Found items:', items.length);
+    console.log('Moodboard Service - Found items (final):', items.length);
     return items;
 
   } catch (error) {
