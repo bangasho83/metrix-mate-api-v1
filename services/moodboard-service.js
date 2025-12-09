@@ -38,7 +38,7 @@ exports.createMoodboardItem = async (data) => {
     const timestamp = db.FieldValue ? db.FieldValue.serverTimestamp() : new Date();
 
     // Create document
-    const moodboardRef = db.collection('moodboard');
+    const moodboardRef = db.collection('moodBoard');
     const docRef = await moodboardRef.add({
       aspectRatio: aspectRatio || null,
       brandId: brandId || null,
@@ -89,7 +89,7 @@ exports.getMoodboardItems = async (filters = {}) => {
       limit
     });
 
-    let query = db.collection('moodboard');
+    let query = db.collection('moodBoard');
     let useOrderBy = true;
 
     // Strategy: Apply filters in order that matches available indexes
@@ -192,7 +192,7 @@ exports.getMoodboardItemById = async (itemId) => {
   try {
     console.log('Moodboard Service - Fetching item by ID:', itemId);
 
-    const docRef = db.collection('moodboard').doc(itemId);
+    const docRef = db.collection('moodBoard').doc(itemId);
     const doc = await docRef.get();
 
     if (!doc.exists) {
@@ -227,7 +227,7 @@ exports.updateMoodboardItem = async (itemId, updates) => {
   try {
     console.log('Moodboard Service - Updating item:', itemId, updates);
 
-    const docRef = db.collection('moodboard').doc(itemId);
+    const docRef = db.collection('moodBoard').doc(itemId);
     const doc = await docRef.get();
 
     if (!doc.exists) {
@@ -278,7 +278,7 @@ exports.deleteMoodboardItem = async (itemId, organizationId = null) => {
   try {
     console.log('Moodboard Service - Deleting item:', itemId);
 
-    const docRef = db.collection('moodboard').doc(itemId);
+    const docRef = db.collection('moodBoard').doc(itemId);
     const doc = await docRef.get();
 
     if (!doc.exists) {
@@ -329,7 +329,7 @@ exports.deleteMoodboardItems = async (itemIds, organizationId = null) => {
 
     for (const itemId of itemIds) {
       try {
-        const docRef = db.collection('moodboard').doc(itemId);
+        const docRef = db.collection('moodBoard').doc(itemId);
         const doc = await docRef.get();
 
         if (!doc.exists) {
@@ -391,7 +391,7 @@ exports.getMoodboardItemsCount = async (filters = {}) => {
 
     console.log('Moodboard Service - Counting items with filters:', filters);
 
-    let query = db.collection('moodboard');
+    let query = db.collection('moodBoard');
 
     // Apply filters in order that matches available indexes
     // If both brandId and organizationId are provided, use composite index
