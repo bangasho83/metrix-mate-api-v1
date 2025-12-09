@@ -83,30 +83,50 @@ exports.getMoodboardItems = async (filters = {}) => {
     console.log('Moodboard Service - Fetching items with filters:', filters);
 
     let query = db.collection('moodboard');
+    let useOrderBy = true;
 
-    // Apply filters
-    if (organizationId) {
+    // Strategy: Apply filters in order that matches available indexes
+    // Available indexes:
+    // 1. brandId + organizationId + createdAt
+    // 2. organizationId + createdAt (assumed)
+
+    // If both brandId and organizationId are provided, use composite index
+    if (brandId && organizationId) {
+      query = query.where('brandId', '==', brandId);
       query = query.where('organizationId', '==', organizationId);
     }
-
-    if (brandId) {
+    // If only organizationId, use it
+    else if (organizationId) {
+      query = query.where('organizationId', '==', organizationId);
+    }
+    // If only brandId, we need to fetch all and filter in-memory
+    else if (brandId) {
       query = query.where('brandId', '==', brandId);
+      useOrderBy = false; // Skip orderBy to avoid index requirement
     }
 
+    // Apply additional filters
     if (userId) {
       query = query.where('userId', '==', userId);
+      useOrderBy = false; // Additional filters may require different indexes
     }
 
     if (model) {
       query = query.where('model', '==', model);
+      useOrderBy = false; // Additional filters may require different indexes
     }
 
-    // Order by createdAt descending and limit
-    query = query.orderBy('createdAt', 'desc').limit(limit);
+    // Only apply orderBy if we're using indexed queries
+    if (useOrderBy) {
+      query = query.orderBy('createdAt', 'desc');
+    }
+
+    // Apply limit
+    query = query.limit(limit * 2); // Fetch more since we might filter in-memory
 
     const snapshot = await query.get();
 
-    const items = [];
+    let items = [];
     snapshot.forEach(doc => {
       const data = doc.data();
       // Convert Firestore timestamp to ISO string
@@ -120,6 +140,18 @@ exports.getMoodboardItems = async (filters = {}) => {
         createdAt
       });
     });
+
+    // If we didn't use orderBy, sort in-memory
+    if (!useOrderBy) {
+      items.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA; // Descending order
+      });
+    }
+
+    // Apply limit after sorting
+    items = items.slice(0, limit);
 
     console.log('Moodboard Service - Found items:', items.length);
     return items;
@@ -340,15 +372,22 @@ exports.getMoodboardItemsCount = async (filters = {}) => {
 
     let query = db.collection('moodboard');
 
-    // Apply filters
-    if (organizationId) {
+    // Apply filters in order that matches available indexes
+    // If both brandId and organizationId are provided, use composite index
+    if (brandId && organizationId) {
+      query = query.where('brandId', '==', brandId);
       query = query.where('organizationId', '==', organizationId);
     }
-
-    if (brandId) {
+    // If only organizationId, use it
+    else if (organizationId) {
+      query = query.where('organizationId', '==', organizationId);
+    }
+    // If only brandId, use it (no orderBy needed for count)
+    else if (brandId) {
       query = query.where('brandId', '==', brandId);
     }
 
+    // Apply additional filters
     if (userId) {
       query = query.where('userId', '==', userId);
     }
