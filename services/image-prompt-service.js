@@ -1,13 +1,32 @@
 /**
  * @fileoverview Image Prompt Service - Generate image generation prompts using OpenAI
+ * Includes both text-to-prompt and image-to-prompt functionality
  */
 
 const { OpenAI } = require('openai');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+/**
+ * Get the image-to-prompt template from local file
+ * @returns {Promise<string>} The prompt template content
+ */
+async function getImageToPromptTemplate() {
+  const localPromptPath = path.join(process.cwd(), 'prompts', 'image-to-prompt.txt');
+  try {
+    const promptContent = await fs.readFile(localPromptPath, 'utf8');
+    console.log('Using local image-to-prompt template from:', localPromptPath);
+    return promptContent;
+  } catch (err) {
+    console.error('Local image-to-prompt template not found at:', localPromptPath);
+    throw new Error('Missing prompts/image-to-prompt.txt. Please add the prompt file to proceed.');
+  }
+}
 
 /**
  * Generate image prompts
@@ -94,3 +113,73 @@ Output JSON schema:
   return { prompts };
 };
 
+/**
+ * Generate a detailed prompt from an image
+ * @param {Object} params
+ * @param {string} params.imageUrl - URL of the image to analyze
+ * @returns {Promise<{ prompt: string, variables: Object }>} Generated prompt and extracted variables
+ */
+exports.generatePromptFromImage = async ({ imageUrl }) => {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('Missing OPENAI_API_KEY');
+  }
+  if (!imageUrl || typeof imageUrl !== 'string') {
+    throw new Error('imageUrl is required and must be a valid URL string');
+  }
+
+  // Get the prompt template
+  const promptTemplate = await getImageToPromptTemplate();
+
+  const response = await Promise.race([
+    openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert image analyst specializing in creating ultra-detailed, professional image generation prompts. Return only valid JSON.'
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: promptTemplate
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageUrl,
+                detail: 'high'
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' }
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('OpenAI API timeout (image-to-prompt)')), 60000))
+  ]);
+
+  const content = response.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Empty response from OpenAI');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (e) {
+    throw new Error('Failed to parse JSON response');
+  }
+
+  if (!parsed.prompt || !parsed.variables) {
+    throw new Error('Invalid JSON structure: missing prompt or variables');
+  }
+
+  return {
+    prompt: parsed.prompt,
+    variables: parsed.variables
+  };
+};
