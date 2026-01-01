@@ -293,7 +293,7 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
           const geoLocations = targeting.geo_locations || {};
 
           // Get detailed location information
-          const locationInfo = getDetailedLocationInfo(geoLocations, targeting);
+          const locationInfo = await getDetailedLocationInfo(geoLocations, targeting, metaAccessToken);
 
           const ageMin = targeting.age_min || '';
           const ageMax = targeting.age_max || '';
@@ -756,9 +756,10 @@ function getInterestsAndBehaviors(targeting) {
  * that matches the Facebook Ads Manager UI display
  * @param {Object} geoLocations - The geo_locations object from targeting
  * @param {Object} targeting - The full targeting object for additional location data
+ * @param {string} accessToken - Meta access token for fetching location details (optional)
  * @returns {Object} Structured location information with formatted display
  */
-function getDetailedLocationInfo(geoLocations, targeting = {}) {
+async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken = null) {
   if (!geoLocations) {
     return {
       formatted: 'worldwide',
@@ -870,15 +871,46 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
     });
   }
 
-  // Process zips
+  // Process zips - store them separately for better formatting
+  const zipCodes = [];
+  const zipDetails = [];
   if (geoLocations.zips && geoLocations.zips.length > 0) {
+    // Try to fetch location details if we have an access token
+    if (accessToken && geoLocations.zips.length <= 100) {
+      try {
+        // Fetch zip code details from Meta API
+        const zipKeys = geoLocations.zips.map(z => z.key).filter(Boolean);
+        if (zipKeys.length > 0) {
+          const response = await axios({
+            method: 'get',
+            url: `${META_BASE_URL}/${META_API_VERSION}/search`,
+            params: {
+              access_token: accessToken,
+              type: 'adgeolocation',
+              location_types: ['zip'],
+              q: zipKeys.slice(0, 10).join(','), // Sample first 10 for details
+            },
+            timeout: 5000
+          });
+
+          if (response.data && response.data.data) {
+            zipDetails.push(...response.data.data);
+          }
+        }
+      } catch (error) {
+        console.log('Could not fetch zip code details:', error.message);
+      }
+    }
+
     geoLocations.zips.forEach(zip => {
-      locations.push({
+      const zipData = {
         type: 'zip',
         name: zip.name || zip.key,
         key: zip.key,
         display: zip.name || zip.key
-      });
+      };
+      locations.push(zipData);
+      zipCodes.push(zip.key || zip.name);
     });
   }
 
@@ -907,13 +939,66 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
     console.warn('No locations found in geoLocations object. Available keys:', Object.keys(geoLocations));
   }
 
-  // Create a formatted location string
-  const formattedLocations = locations.map(loc => loc.display || loc.name).join(', ');
+  // Create a formatted location string with better zip code handling
+  let formattedLocations = '';
+
+  // Separate zip codes from other location types
+  const nonZipLocations = locations.filter(loc => loc.type !== 'zip');
+
+  if (nonZipLocations.length > 0) {
+    formattedLocations = nonZipLocations.map(loc => loc.display || loc.name).join(', ');
+  }
+
+  // Add zip code summary if there are zip codes
+  if (zipCodes.length > 0) {
+    // Extract unique cities/regions from zip details if available
+    const cities = new Set();
+    const states = new Set();
+
+    if (zipDetails.length > 0) {
+      zipDetails.forEach(detail => {
+        if (detail.region) cities.add(detail.region);
+        if (detail.country_code) states.add(detail.country_code);
+      });
+    }
+
+    // Create a readable summary
+    let zipSummary = '';
+    if (cities.size > 0) {
+      const cityList = Array.from(cities).slice(0, 3);
+      zipSummary = cityList.join(', ');
+      if (cities.size > 3) {
+        zipSummary += ` and ${cities.size - 3} other ${cities.size - 3 === 1 ? 'city' : 'cities'}`;
+      }
+      zipSummary += ` (${zipCodes.length} zip code${zipCodes.length > 1 ? 's' : ''})`;
+    } else {
+      // Fallback: Group by state prefix
+      const zipsByState = {};
+      zipCodes.forEach(zip => {
+        const zipStr = String(zip);
+        const prefix = zipStr.substring(0, 2);
+        if (!zipsByState[prefix]) {
+          zipsByState[prefix] = [];
+        }
+        zipsByState[prefix].push(zipStr);
+      });
+
+      const stateCount = Object.keys(zipsByState).length;
+      zipSummary = `${zipCodes.length} zip code${zipCodes.length > 1 ? 's' : ''} across ${stateCount} region${stateCount > 1 ? 's' : ''}`;
+    }
+
+    if (formattedLocations) {
+      formattedLocations += ` - ${zipSummary}`;
+    } else {
+      formattedLocations = zipSummary;
+    }
+  }
 
   return {
     formatted: formattedLocations || 'worldwide',
     locations: locations,
-    excluded: excludedLocations
+    excluded: excludedLocations,
+    zipCodes: zipCodes.length > 0 ? zipCodes : undefined // Include raw zip codes for reference
   };
 }
 
@@ -1203,7 +1288,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
 
         // Get detailed location information
         const geoLocations = targeting.geo_locations || {};
-        const locationInfo = getDetailedLocationInfo(geoLocations, targeting);
+        const locationInfo = await getDetailedLocationInfo(geoLocations, targeting, metaAccessToken);
         
         // Process location data into a structured format for the API response
         const locationData = [];
