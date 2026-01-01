@@ -752,6 +752,18 @@ function getInterestsAndBehaviors(targeting) {
 }
 
 /**
+ * Helper function to get state name from region ID
+ * @param {string} regionId - Region ID from Meta API
+ * @returns {string} State name or region ID if not found
+ */
+function getStateNameFromRegionId(regionId) {
+  // Common US state mappings - Meta uses region IDs like "3843" for Maryland
+  // For now, we'll return the region ID as-is since we get the full name from the API
+  // This is a placeholder for future enhancement if needed
+  return regionId;
+}
+
+/**
  * Formats location information from geo_locations object into a detailed structure
  * that matches the Facebook Ads Manager UI display
  * @param {Object} geoLocations - The geo_locations object from targeting
@@ -871,46 +883,103 @@ async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken
     });
   }
 
-  // Process zips - store them separately for better formatting
+  // Process zips - fetch full details to match Facebook Ads Manager display
   const zipCodes = [];
-  const zipDetails = [];
-  if (geoLocations.zips && geoLocations.zips.length > 0) {
-    // Try to fetch location details if we have an access token
-    if (accessToken && geoLocations.zips.length <= 100) {
-      try {
-        // Fetch zip code details from Meta API
-        const zipKeys = geoLocations.zips.map(z => z.key).filter(Boolean);
-        if (zipKeys.length > 0) {
-          const response = await axios({
-            method: 'get',
-            url: `${META_BASE_URL}/${META_API_VERSION}/search`,
-            params: {
-              access_token: accessToken,
-              type: 'adgeolocation',
-              location_types: ['zip'],
-              q: zipKeys.slice(0, 10).join(','), // Sample first 10 for details
-            },
-            timeout: 5000
-          });
+  const zipLocationMap = new Map(); // Map zip keys to their full location details
 
-          if (response.data && response.data.data) {
-            zipDetails.push(...response.data.data);
+  if (geoLocations.zips && geoLocations.zips.length > 0) {
+    // Fetch location details from Meta API to get city/state names
+    if (accessToken) {
+      try {
+        // Batch fetch zip code details in groups of 50
+        const zipKeys = geoLocations.zips.map(z => z.key).filter(Boolean);
+        const batchSize = 50;
+
+        for (let i = 0; i < zipKeys.length; i += batchSize) {
+          const batch = zipKeys.slice(i, i + batchSize);
+          const idsParam = batch.join(',');
+
+          try {
+            const response = await axios({
+              method: 'get',
+              url: `${META_BASE_URL}/${META_API_VERSION}/`,
+              params: {
+                access_token: accessToken,
+                ids: idsParam,
+                fields: 'key,name,region,region_id,country_code,country_name,type'
+              },
+              timeout: 10000
+            });
+
+            if (response.data) {
+              // Map the results by key
+              Object.values(response.data).forEach(location => {
+                if (location.key) {
+                  zipLocationMap.set(location.key, location);
+                }
+              });
+            }
+          } catch (batchError) {
+            console.log(`Could not fetch batch of zip codes (${i}-${i + batchSize}):`, batchError.message);
           }
         }
       } catch (error) {
-        console.log('Could not fetch zip code details:', error.message);
+        console.log('Error fetching zip code details:', error.message);
       }
     }
 
+    // Process each zip code with its full location details
     geoLocations.zips.forEach(zip => {
+      const zipKey = zip.key;
+      const locationDetail = zipLocationMap.get(zipKey);
+
+      let displayName = zip.name || zipKey;
+      let cityName = null;
+      let stateName = null;
+
+      if (locationDetail) {
+        // The 'name' field typically contains "City, State" format
+        // The 'region' field contains the state name
+        const fullName = locationDetail.name || '';
+
+        // Try to parse city and state from the name
+        if (fullName.includes(',')) {
+          const parts = fullName.split(',').map(p => p.trim());
+          cityName = parts[0];
+          stateName = parts[1] || locationDetail.region;
+        } else {
+          cityName = fullName;
+          stateName = locationDetail.region;
+        }
+
+        // If we still don't have a state, use country_name
+        if (!stateName && locationDetail.country_name) {
+          stateName = locationDetail.country_name;
+        }
+
+        // Format like Facebook: "City (zipcode)" or just "(zipcode)" if no city
+        const zipCode = zipKey.replace('US:', '');
+        if (cityName && cityName !== zipKey && cityName !== zipCode) {
+          displayName = `${cityName} (${zipCode})`;
+        } else {
+          displayName = `(${zipCode})`;
+        }
+      } else {
+        // Fallback if we couldn't fetch details
+        displayName = `(${zipKey.replace('US:', '')})`;
+      }
+
       const zipData = {
         type: 'zip',
-        name: zip.name || zip.key,
-        key: zip.key,
-        display: zip.name || zip.key
+        name: zip.name || zipKey,
+        key: zipKey,
+        city: cityName,
+        state: stateName,
+        display: displayName
       };
+
       locations.push(zipData);
-      zipCodes.push(zip.key || zip.name);
+      zipCodes.push(zipKey);
     });
   }
 
@@ -939,58 +1008,70 @@ async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken
     console.warn('No locations found in geoLocations object. Available keys:', Object.keys(geoLocations));
   }
 
-  // Create a formatted location string with better zip code handling
+  // Create a formatted location string matching Facebook Ads Manager format
   let formattedLocations = '';
 
   // Separate zip codes from other location types
   const nonZipLocations = locations.filter(loc => loc.type !== 'zip');
+  const zipLocations = locations.filter(loc => loc.type === 'zip');
 
   if (nonZipLocations.length > 0) {
     formattedLocations = nonZipLocations.map(loc => loc.display || loc.name).join(', ');
   }
 
-  // Add zip code summary if there are zip codes
-  if (zipCodes.length > 0) {
-    // Extract unique cities/regions from zip details if available
-    const cities = new Set();
-    const states = new Set();
+  // Format zip codes grouped by state like Facebook Ads Manager
+  if (zipLocations.length > 0) {
+    // Group zip locations by state, then by city within each state
+    const locationsByState = {};
 
-    if (zipDetails.length > 0) {
-      zipDetails.forEach(detail => {
-        if (detail.region) cities.add(detail.region);
-        if (detail.country_code) states.add(detail.country_code);
-      });
-    }
+    zipLocations.forEach(loc => {
+      // Use state name or fallback to "United States"
+      const state = loc.state || 'United States';
 
-    // Create a readable summary
-    let zipSummary = '';
-    if (cities.size > 0) {
-      const cityList = Array.from(cities).slice(0, 3);
-      zipSummary = cityList.join(', ');
-      if (cities.size > 3) {
-        zipSummary += ` and ${cities.size - 3} other ${cities.size - 3 === 1 ? 'city' : 'cities'}`;
+      if (!locationsByState[state]) {
+        locationsByState[state] = {
+          withCity: {},  // Group by city name
+          withoutCity: [] // Zips without city names
+        };
       }
-      zipSummary += ` (${zipCodes.length} zip code${zipCodes.length > 1 ? 's' : ''})`;
-    } else {
-      // Fallback: Group by state prefix
-      const zipsByState = {};
-      zipCodes.forEach(zip => {
-        const zipStr = String(zip);
-        const prefix = zipStr.substring(0, 2);
-        if (!zipsByState[prefix]) {
-          zipsByState[prefix] = [];
+
+      if (loc.city && loc.city !== loc.key) {
+        // Group by city name
+        if (!locationsByState[state].withCity[loc.city]) {
+          locationsByState[state].withCity[loc.city] = [];
         }
-        zipsByState[prefix].push(zipStr);
+        locationsByState[state].withCity[loc.city].push(loc.key.replace('US:', ''));
+      } else {
+        // No city name, just add the zip
+        locationsByState[state].withoutCity.push(loc.key.replace('US:', ''));
+      }
+    });
+
+    // Format each state group like Facebook: "City1 (zip1), City1 (zip2), City2 (zip3) State"
+    const stateGroups = Object.entries(locationsByState).map(([state, data]) => {
+      const parts = [];
+
+      // Add zips without city names first (just zip codes in parentheses)
+      if (data.withoutCity.length > 0) {
+        parts.push(data.withoutCity.map(zip => `(${zip})`).join(', '));
+      }
+
+      // Add city-grouped zips
+      Object.entries(data.withCity).forEach(([city, zips]) => {
+        zips.forEach(zip => {
+          parts.push(`${city} (${zip})`);
+        });
       });
 
-      const stateCount = Object.keys(zipsByState).length;
-      zipSummary = `${zipCodes.length} zip code${zipCodes.length > 1 ? 's' : ''} across ${stateCount} region${stateCount > 1 ? 's' : ''}`;
-    }
+      return parts.length > 0 ? `${parts.join(', ')} ${state}` : '';
+    }).filter(Boolean);
+
+    const zipFormatted = stateGroups.join('; ');
 
     if (formattedLocations) {
-      formattedLocations += ` - ${zipSummary}`;
+      formattedLocations += `; ${zipFormatted}`;
     } else {
-      formattedLocations = zipSummary;
+      formattedLocations = zipFormatted;
     }
   }
 
