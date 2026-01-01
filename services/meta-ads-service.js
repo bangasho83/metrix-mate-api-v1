@@ -336,7 +336,6 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
             status: adSet.status,
             audience: {
               location: locationInfo.formatted,
-              locations: locationInfo.locations,
               excluded: locationInfo.excluded,
               age_range: ageMin && ageMax ? `${ageMin}-${ageMax}` : 'all',
               gender: gender
@@ -1136,9 +1135,7 @@ async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken
 
   return {
     formatted: formattedLocations || 'worldwide',
-    locations: locations,
-    excluded: excludedLocations,
-    zipCodes: zipCodes.length > 0 ? zipCodes : undefined // Include raw zip codes for reference
+    excluded: excludedLocations.length > 0 ? excludedLocations : undefined
   };
 }
 
@@ -1430,48 +1427,6 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
         const geoLocations = targeting.geo_locations || {};
         const locationInfo = await getDetailedLocationInfo(geoLocations, targeting, metaAccessToken);
         
-        // Process location data into a structured format for the API response
-        const locationData = [];
-        
-        // Process cities
-        if (geoLocations.cities && geoLocations.cities.length > 0) {
-          geoLocations.cities.forEach(city => {
-            locationData.push({
-              name: city.name,
-              type: 'city',
-              region: city.region_id,
-              country: city.country_code,
-              radius: city.radius || 0
-            });
-          });
-        }
-        
-        // Process places
-        if (geoLocations.places && geoLocations.places.length > 0) {
-          geoLocations.places.forEach(place => {
-            locationData.push({
-              name: place.name,
-              type: 'place',
-              latitude: place.latitude,
-              longitude: place.longitude,
-              radius: place.radius || 0
-            });
-          });
-        }
-        
-        // Process custom locations
-        if (geoLocations.custom_locations && geoLocations.custom_locations.length > 0) {
-          geoLocations.custom_locations.forEach(loc => {
-            locationData.push({
-              name: loc.address_string || `Location at ${loc.latitude},${loc.longitude}`,
-              type: 'custom',
-              latitude: loc.latitude,
-              longitude: loc.longitude,
-              radius: loc.radius || 0
-            });
-          });
-        }
-        
         const ageMin = targeting.age_min || '';
         const ageMax = targeting.age_max || '';
         const genders = {
@@ -1503,7 +1458,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
           status: adSet.status,
           audience: {
             location: locationInfo.formatted,
-            locations: locationData, // Add the structured location data array
+            excluded: locationInfo.excluded,
             age_range: ageMin && ageMax ? `${ageMin}-${ageMax}` : 'all',
             gender: gender,
             interests: audienceDetails.interests,
