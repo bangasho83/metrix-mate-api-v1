@@ -919,21 +919,38 @@ async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken
           const batch = zipKeys.slice(i, i + batchSize);
 
           try {
-            // Create batch request array
-            const batchRequests = batch.map(zipKey => ({
-              method: 'GET',
-              relative_url: `search?type=adgeolocation&location_types=["zip"]&q=${zipKey.replace('US:', '')}&limit=1`
-            }));
+            // Create batch request array with properly encoded parameters
+            const batchRequests = batch.map(zipKey => {
+              const zipCode = zipKey.replace('US:', '');
+              // Properly encode the URL parameters
+              const params = new URLSearchParams({
+                type: 'adgeolocation',
+                location_types: '["zip"]',
+                q: zipCode,
+                limit: '1'
+              });
+              return {
+                method: 'GET',
+                relative_url: `search?${params.toString()}`
+              };
+            });
 
             const response = await axios({
               method: 'post',
               url: `${META_BASE_URL}/${META_API_VERSION}/`,
               params: {
-                access_token: accessToken,
+                access_token: accessToken
+              },
+              data: {
                 batch: JSON.stringify(batchRequests)
+              },
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
               },
               timeout: 15000
             });
+
+            console.log(`Batch response status: ${response.status}, data type: ${Array.isArray(response.data) ? 'array' : typeof response.data}`);
 
             if (response.data && Array.isArray(response.data)) {
               response.data.forEach((result, idx) => {
@@ -943,18 +960,24 @@ async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken
                     if (bodyData.data && bodyData.data.length > 0) {
                       const location = bodyData.data[0];
                       const zipKey = batch[idx];
+                      console.log(`Found location for ${zipKey}:`, location.name, location.region);
                       zipLocationMap.set(zipKey, location);
                     }
                   } catch (parseError) {
-                    // Skip invalid responses
+                    console.error(`Error parsing batch result ${idx}:`, parseError.message);
                   }
+                } else if (result.code !== 200) {
+                  console.error(`Batch request ${idx} failed with code ${result.code}`);
                 }
               });
             }
 
             console.log(`Batch ${i}-${Math.min(i + batchSize, zipKeys.length)}: Found ${zipLocationMap.size} zip details so far`);
           } catch (batchError) {
-            console.error(`Error fetching batch ${i}-${i + batchSize}:`, batchError.message);
+            console.error(`Error fetching batch ${i}-${i + batchSize}:`, {
+              message: batchError.message,
+              response: batchError.response?.data
+            });
           }
         }
 
