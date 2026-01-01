@@ -888,43 +888,79 @@ async function getDetailedLocationInfo(geoLocations, targeting = {}, accessToken
   const zipLocationMap = new Map(); // Map zip keys to their full location details
 
   if (geoLocations.zips && geoLocations.zips.length > 0) {
-    // Fetch location details from Meta API to get city/state names
-    if (accessToken) {
+    console.log('Processing zips:', geoLocations.zips.length, 'zip codes');
+
+    // First, check if the zip objects already have name/region info
+    geoLocations.zips.forEach(zip => {
+      console.log('Zip object:', JSON.stringify(zip));
+      if (zip.name && zip.name !== zip.key) {
+        // The zip object already has location info
+        zipLocationMap.set(zip.key, {
+          key: zip.key,
+          name: zip.name,
+          region: zip.region,
+          region_id: zip.region_id,
+          country_code: zip.country_code || 'US',
+          country_name: zip.country_name
+        });
+      }
+    });
+
+    // If we don't have location details and have an access token, try to fetch them using batch API
+    if (zipLocationMap.size < geoLocations.zips.length && accessToken) {
       try {
-        // Batch fetch zip code details in groups of 50
+        console.log('Fetching zip code details from Meta API using batch requests...');
         const zipKeys = geoLocations.zips.map(z => z.key).filter(Boolean);
+
+        // Use batch API - more efficient than individual requests
         const batchSize = 50;
 
         for (let i = 0; i < zipKeys.length; i += batchSize) {
           const batch = zipKeys.slice(i, i + batchSize);
-          const idsParam = batch.join(',');
 
           try {
+            // Create batch request array
+            const batchRequests = batch.map(zipKey => ({
+              method: 'GET',
+              relative_url: `search?type=adgeolocation&location_types=["zip"]&q=${zipKey.replace('US:', '')}&limit=1`
+            }));
+
             const response = await axios({
-              method: 'get',
+              method: 'post',
               url: `${META_BASE_URL}/${META_API_VERSION}/`,
               params: {
                 access_token: accessToken,
-                ids: idsParam,
-                fields: 'key,name,region,region_id,country_code,country_name,type'
+                batch: JSON.stringify(batchRequests)
               },
-              timeout: 10000
+              timeout: 15000
             });
 
-            if (response.data) {
-              // Map the results by key
-              Object.values(response.data).forEach(location => {
-                if (location.key) {
-                  zipLocationMap.set(location.key, location);
+            if (response.data && Array.isArray(response.data)) {
+              response.data.forEach((result, idx) => {
+                if (result.code === 200 && result.body) {
+                  try {
+                    const bodyData = JSON.parse(result.body);
+                    if (bodyData.data && bodyData.data.length > 0) {
+                      const location = bodyData.data[0];
+                      const zipKey = batch[idx];
+                      zipLocationMap.set(zipKey, location);
+                    }
+                  } catch (parseError) {
+                    // Skip invalid responses
+                  }
                 }
               });
             }
+
+            console.log(`Batch ${i}-${Math.min(i + batchSize, zipKeys.length)}: Found ${zipLocationMap.size} zip details so far`);
           } catch (batchError) {
-            console.log(`Could not fetch batch of zip codes (${i}-${i + batchSize}):`, batchError.message);
+            console.error(`Error fetching batch ${i}-${i + batchSize}:`, batchError.message);
           }
         }
+
+        console.log(`Final: Fetched details for ${zipLocationMap.size}/${zipKeys.length} zip codes`);
       } catch (error) {
-        console.log('Error fetching zip code details:', error.message);
+        console.error('Error fetching zip code details:', error.message);
       }
     }
 
@@ -1161,7 +1197,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
         url: `${META_BASE_URL}/${META_API_VERSION}/${campaignId}/adsets`,
         params: {
           access_token: metaAccessToken,
-          fields: 'name,status,targeting,bid_strategy,billing_event,optimization_goal,promoted_object,daily_budget,lifetime_budget,start_time,end_time,effective_status,publisher_platforms,platform_positions,device_platforms,insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
+          fields: 'name,status,targeting{geo_locations{countries,regions,cities,zips,custom_locations,places,location_types},age_min,age_max,genders,interests,behaviors,flexible_spec,exclusions,custom_audiences,excluded_custom_audiences},bid_strategy,billing_event,optimization_goal,promoted_object,daily_budget,lifetime_budget,start_time,end_time,effective_status,publisher_platforms,platform_positions,device_platforms,insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
           limit: 100
         },
         timeout: 10000
