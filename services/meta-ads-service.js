@@ -765,9 +765,12 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
       locations: []
     };
   }
-  
+
+  // Log the geoLocations object to debug what fields are present
+  console.log('getDetailedLocationInfo - geoLocations:', JSON.stringify(geoLocations, null, 2));
+
   const locations = [];
-  
+
   // Process countries
   if (geoLocations.countries && geoLocations.countries.length > 0) {
     geoLocations.countries.forEach(country => {
@@ -778,7 +781,7 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
       });
     });
   }
-  
+
   // Process regions
   if (geoLocations.regions && geoLocations.regions.length > 0) {
     geoLocations.regions.forEach(region => {
@@ -791,7 +794,7 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
       });
     });
   }
-  
+
   // Process cities
   if (geoLocations.cities && geoLocations.cities.length > 0) {
     geoLocations.cities.forEach(city => {
@@ -803,16 +806,16 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
         radius: city.radius || 0,
         display: `${city.name}${city.region_name ? `, ${city.region_name}` : ''}${city.radius ? ` (+${city.radius} km)` : ''}`
       };
-      
+
       if (city.latitude && city.longitude) {
         location.latitude = city.latitude;
         location.longitude = city.longitude;
       }
-      
+
       locations.push(location);
     });
   }
-  
+
   // Process custom locations (radius targeting)
   if (geoLocations.custom_locations && geoLocations.custom_locations.length > 0) {
     geoLocations.custom_locations.forEach(loc => {
@@ -824,15 +827,15 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
         latitude: loc.latitude,
         longitude: loc.longitude,
         distance_unit: loc.distance_unit || 'km',
-        display: loc.address_string 
+        display: loc.address_string
           ? `${loc.address_string} (+${loc.radius} ${loc.distance_unit || 'km'})`
           : `Custom location (+${loc.radius} ${loc.distance_unit || 'km'})`
       };
-      
+
       locations.push(location);
     });
   }
-  
+
   // Process places
   if (geoLocations.places && geoLocations.places.length > 0) {
     geoLocations.places.forEach(place => {
@@ -845,21 +848,68 @@ function getDetailedLocationInfo(geoLocations, targeting = {}) {
         longitude: place.longitude,
         display: place.name || `Place ID: ${place.id}`
       };
-      
+
       locations.push(location);
     });
   }
-  
+
+  // Process location_types (e.g., home, recent, travel_in)
+  if (geoLocations.location_types && geoLocations.location_types.length > 0) {
+    console.log('Found location_types:', geoLocations.location_types);
+  }
+
+  // Process geo_markets
+  if (geoLocations.geo_markets && geoLocations.geo_markets.length > 0) {
+    geoLocations.geo_markets.forEach(market => {
+      locations.push({
+        type: 'geo_market',
+        name: market.name || market.key,
+        key: market.key,
+        display: market.name || market.key
+      });
+    });
+  }
+
+  // Process zips
+  if (geoLocations.zips && geoLocations.zips.length > 0) {
+    geoLocations.zips.forEach(zip => {
+      locations.push({
+        type: 'zip',
+        name: zip.name || zip.key,
+        key: zip.key,
+        display: zip.name || zip.key
+      });
+    });
+  }
+
+  // Process electoral_districts
+  if (geoLocations.electoral_districts && geoLocations.electoral_districts.length > 0) {
+    geoLocations.electoral_districts.forEach(district => {
+      locations.push({
+        type: 'electoral_district',
+        name: district.name || district.key,
+        key: district.key,
+        display: district.name || district.key
+      });
+    });
+  }
+
   // Process excluded locations if needed
   const excludedLocations = [];
   if (geoLocations.excluded_geo_locations) {
     // Process excluded countries, cities, etc. similar to above
     // Add to excludedLocations array
   }
-  
+
+  // Log the processed locations
+  console.log('getDetailedLocationInfo - processed locations count:', locations.length);
+  if (locations.length === 0) {
+    console.warn('No locations found in geoLocations object. Available keys:', Object.keys(geoLocations));
+  }
+
   // Create a formatted location string
   const formattedLocations = locations.map(loc => loc.display || loc.name).join(', ');
-  
+
   return {
     formatted: formattedLocations || 'worldwide',
     locations: locations,
@@ -1101,12 +1151,20 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
         
         // Extract audience data from targeting
         const targeting = adSet.targeting || {};
-        
+
+        // Log targeting data for debugging
+        console.log(`Ad Set ${adSet.id} - Targeting data:`, JSON.stringify({
+          has_targeting: !!adSet.targeting,
+          has_geo_locations: !!(targeting.geo_locations),
+          geo_locations_keys: targeting.geo_locations ? Object.keys(targeting.geo_locations) : [],
+          targeting_keys: Object.keys(targeting)
+        }, null, 2));
+
         // Extract excluded audiences directly from the targeting object
         const excludedCustomAudiences = [];
         const excludedInterests = [];
         const excludedBehaviors = [];
-        
+
         // Process excluded custom audiences
         if (targeting.excluded_custom_audiences && Array.isArray(targeting.excluded_custom_audiences)) {
           targeting.excluded_custom_audiences.forEach(audience => {
@@ -1117,7 +1175,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             }
           });
         }
-        
+
         // Process excluded interests
         if (targeting.excluded_interests && Array.isArray(targeting.excluded_interests)) {
           targeting.excluded_interests.forEach(interest => {
@@ -1128,7 +1186,7 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             }
           });
         }
-        
+
         // Process excluded behaviors
         if (targeting.excluded_behaviors && Array.isArray(targeting.excluded_behaviors)) {
           targeting.excluded_behaviors.forEach(behavior => {
@@ -1139,10 +1197,10 @@ exports.getMetaCampaignDetails = async (metaAccountId, campaignId, from, to, opt
             }
           });
         }
-        
+
         // Extract interests and behaviors using existing function
         const audienceDetails = getInterestsAndBehaviors(targeting);
-        
+
         // Get detailed location information
         const geoLocations = targeting.geo_locations || {};
         const locationInfo = getDetailedLocationInfo(geoLocations, targeting);
