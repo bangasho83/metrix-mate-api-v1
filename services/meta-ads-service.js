@@ -200,7 +200,7 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
           url: `${META_BASE_URL}/${META_API_VERSION}/${campaign.id}/adsets`,
           params: {
             access_token: metaAccessToken,
-            fields: 'name,status,targeting,bid_strategy,billing_event,optimization_goal,promoted_object,daily_budget,lifetime_budget,start_time,end_time,publisher_platforms,platform_positions,facebook_positions,device_platforms,insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach}',
+            fields: 'name,status,targeting,bid_strategy,billing_event,optimization_goal,promoted_object,daily_budget,lifetime_budget,start_time,end_time,publisher_platforms,platform_positions,facebook_positions,device_platforms,insights.time_range(' + JSON.stringify(timeRange) + '){spend,impressions,clicks,reach,frequency}',
             limit: 50
           },
           timeout: 10000
@@ -213,7 +213,7 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
             url: `${META_BASE_URL}/${META_API_VERSION}/${adSet.id}/ads`,
             params: {
               access_token: metaAccessToken,
-              fields: 'id,name,status,effective_status,created_time,updated_time,creative{id,name,object_type,object_url,image_url,thumbnail_url,video_id,asset_feed_spec,object_story_id,object_story_spec,status,title,body,call_to_action_type,link_url},adcreatives{id,name,object_type,object_url,image_url,thumbnail_url,video_id,object_story_id,object_story_spec,asset_feed_spec,image_hash,title,body,call_to_action_type},insights.time_range(' + JSON.stringify(timeRange) + '){date_start,date_stop,impressions,clicks,spend,cpm,cpc,ctr,reach,frequency,actions,cost_per_conversion,results,cost_per_result}',
+              fields: 'id,name,status,effective_status,created_time,updated_time,creative{id,name,object_type,object_url,image_url,thumbnail_url,video_id,asset_feed_spec,object_story_id,object_story_spec,status,title,body,call_to_action_type,link_url},adcreatives{id,name,object_type,object_url,image_url,thumbnail_url,video_id,object_story_id,object_story_spec,asset_feed_spec,image_hash,title,body,call_to_action_type},insights.time_range(' + JSON.stringify(timeRange) + '){date_start,date_stop,impressions,clicks,spend,cpm,cpc,ctr,reach,frequency,actions,action_values,conversions,conversion_values,cost_per_conversion,results,cost_per_result,purchase_roas}',
               limit: 50
             },
             timeout: 10000
@@ -226,6 +226,40 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
             const metrics = ad.insights?.data?.[0] || {};
             const impressions = parseInt(metrics.impressions || 0);
             const clicks = parseInt(metrics.clicks || 0);
+            const spend = parseFloat(metrics.spend || 0);
+
+            // Extract actions by type
+            const actions = metrics.actions || [];
+            const actionValues = metrics.action_values || [];
+
+            // Helper function to get action value by type
+            const getActionValue = (actionType) => {
+              const action = actions.find(a => a.action_type === actionType);
+              return parseInt(action?.value || 0);
+            };
+
+            // Helper function to get action value (monetary) by type
+            const getActionMonetaryValue = (actionType) => {
+              const actionValue = actionValues.find(a => a.action_type === actionType);
+              return parseFloat(actionValue?.value || 0);
+            };
+
+            // Extract specific action types
+            const purchases = getActionValue('purchase') || getActionValue('offsite_conversion.fb_pixel_purchase');
+            const purchaseValue = getActionMonetaryValue('purchase') || getActionMonetaryValue('offsite_conversion.fb_pixel_purchase');
+            const postEngagements = getActionValue('post_engagement');
+            const pageLikes = getActionValue('like');
+            const addsToCart = getActionValue('add_to_cart') || getActionValue('offsite_conversion.fb_pixel_add_to_cart');
+            const checkoutsInitiated = getActionValue('initiate_checkout') || getActionValue('offsite_conversion.fb_pixel_initiate_checkout');
+            const instagramProfileVisits = getActionValue('ig_profile_visit');
+            const messagingConversationsStarted = getActionValue('onsite_conversion.messaging_conversation_started_7d');
+
+            // Calculate Purchase ROAS
+            const purchaseRoas = metrics.purchase_roas ? parseFloat(metrics.purchase_roas[0]?.value || 0) :
+                                 (spend > 0 && purchaseValue > 0 ? parseFloat((purchaseValue / spend).toFixed(2)) : 0);
+
+            // Calculate cost per purchase
+            const costPerPurchase = purchases > 0 ? parseFloat((spend / purchases).toFixed(2)) : 0;
 
             // High-resolution media URL resolution
             // Priority: object_url → image_url → thumbnail_url (avoid CDN-resized thumbnails)
@@ -272,7 +306,8 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
               created_time: ad.created_time,
               updated_time: ad.updated_time,
               metrics: {
-                spend: parseFloat(metrics.spend || 0),
+                // Basic metrics
+                spend: spend,
                 clicks: clicks,
                 impressions: impressions,
                 reach: parseInt(metrics.reach || 0),
@@ -280,10 +315,35 @@ exports.getMetaAdsData = async (metaAccountId, from, to, options = {}) => {
                 cpm: parseFloat(metrics.cpm || 0),
                 cpc: parseFloat(metrics.cpc || 0),
                 ctr: parseFloat(metrics.ctr || 0) || (impressions > 0 ? parseFloat(((clicks / impressions) * 100).toFixed(2)) : 0),
-                cost_per_conversion: parseFloat(metrics.cost_per_conversion || 0),
+
+                // Conversion metrics
                 results: parseInt(metrics.results || 0),
                 cost_per_result: parseFloat(metrics.cost_per_result || 0),
-                actions: metrics.actions || []
+                cost_per_conversion: parseFloat(metrics.cost_per_conversion || 0),
+
+                // Purchase metrics
+                purchases: purchases,
+                purchase_value: purchaseValue,
+                cost_per_purchase: costPerPurchase,
+                purchase_roas: purchaseRoas,
+
+                // Engagement metrics
+                post_engagements: postEngagements,
+                page_likes: pageLikes,
+                adds_to_cart: addsToCart,
+                checkouts_initiated: checkoutsInitiated,
+                instagram_profile_visits: instagramProfileVisits,
+                messaging_conversations_started: messagingConversationsStarted,
+
+                // Ad set level metrics (for reference)
+                adset_reach: parseInt(adSet.insights?.data?.[0]?.reach || 0),
+                adset_spend: parseFloat(adSet.insights?.data?.[0]?.spend || 0),
+                adset_impressions: parseInt(adSet.insights?.data?.[0]?.impressions || 0),
+                adset_clicks: parseInt(adSet.insights?.data?.[0]?.clicks || 0),
+                adset_frequency: parseFloat(adSet.insights?.data?.[0]?.frequency || 0),
+
+                // Raw actions array for additional data
+                actions: actions
               }
             };
           });
