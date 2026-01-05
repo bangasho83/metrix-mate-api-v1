@@ -6,6 +6,46 @@ The Billing API provides endpoints for managing billing and credit balance infor
 
 ## Endpoints
 
+### Get Rate Card
+
+**Endpoint:** `GET /api/billing/rate-card`
+
+**Description:** Retrieves the pricing rate card showing credits required for each service.
+
+**Response:**
+```json
+{
+  "success": true,
+  "rateCard": {
+    "image-gen": 25,
+    "site-audit": 300,
+    "html-scraper": 10,
+    "keyword-sim": 100,
+    "meta-ad-sim": 50,
+    "image-prompt": 10,
+    "calendar-sim": 200,
+    "keyword-research": 5,
+    "mates-take/overview": 5
+  },
+  "totalServices": 9,
+  "description": "Each credit is USD .005 (For example 10,000 credits = USD 50)"
+}
+```
+
+**Example Request:**
+```bash
+curl -X GET "https://social-apis-two.vercel.app/api/billing/rate-card"
+```
+
+**Example with JavaScript:**
+```javascript
+const response = await fetch('https://social-apis-two.vercel.app/api/billing/rate-card');
+const data = await response.json();
+
+console.log('Rate Card:', data.rateCard);
+console.log('Image Gen Cost:', data.rateCard['image-gen'], 'credits');
+```
+
 ### Get Balance
 
 **Endpoint:** `GET /api/billing/balance`

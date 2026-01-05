@@ -1,6 +1,7 @@
 /**
  * Brands API
  * GET /api/brands?organizationId=ORG_ID - Returns brand documents (excludes archived)
+ * POST /api/brands - Create a new brand
  * DELETE /api/brands - Soft delete (archive) a brand
  * PATCH /api/brands - Restore an archived brand
  */
@@ -12,10 +13,136 @@ export const config = { maxDuration: 30 };
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // POST: Create a new brand
+  if (req.method === 'POST') {
+    try {
+      const body = req.body || {};
+      const {
+        client_name,
+        website,
+        industry,
+        country,
+        tags,
+        currency_symbol,
+        brand_guidelines,
+        services,
+        createdBy,
+        organizationId
+      } = body;
+
+      // Validate required parameters
+      if (!client_name || typeof client_name !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: client_name',
+          message: 'client_name must be a valid string'
+        });
+      }
+
+      if (!organizationId || typeof organizationId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: organizationId',
+          message: 'organizationId must be a valid string'
+        });
+      }
+
+      if (!createdBy || typeof createdBy !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: createdBy',
+          message: 'createdBy must be a valid string (user ID)'
+        });
+      }
+
+      // Validate optional fields
+      if (website && typeof website !== 'string') {
+        return res.status(400).json({
+          error: 'Invalid field: website',
+          message: 'website must be a string'
+        });
+      }
+
+      if (tags && !Array.isArray(tags)) {
+        return res.status(400).json({
+          error: 'Invalid field: tags',
+          message: 'tags must be an array'
+        });
+      }
+
+      if (services && typeof services !== 'object') {
+        return res.status(400).json({
+          error: 'Invalid field: services',
+          message: 'services must be an object'
+        });
+      }
+
+      // Create brand document
+      const brandRef = db.collection('brands').doc();
+      const brandId = brandRef.id;
+
+      const now = new Date();
+      const timestamp = db.FieldValue ? db.FieldValue.serverTimestamp() : now;
+
+      const brandData = {
+        client_name,
+        organizationId,
+        createdBy,
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived: false,
+        // Optional fields
+        ...(website && { website }),
+        ...(industry && { industry }),
+        ...(country && { country }),
+        ...(tags && { tags }),
+        ...(currency_symbol && { currency_symbol }),
+        ...(brand_guidelines && { brand_guidelines }),
+        ...(services && { services })
+      };
+
+      await brandRef.set(brandData);
+
+      console.log('Brand created successfully:', {
+        brandId,
+        client_name,
+        organizationId,
+        createdBy,
+        timestamp: now.toISOString()
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Brand created successfully',
+        brand: {
+          id: brandId,
+          client_name,
+          organizationId,
+          createdBy,
+          created_at: now.toISOString(),
+          ...(website && { website }),
+          ...(industry && { industry }),
+          ...(country && { country }),
+          ...(tags && { tags }),
+          ...(currency_symbol && { currency_symbol }),
+          ...(services && { services })
+        }
+      });
+    } catch (err) {
+      console.error('POST brand error:', {
+        message: err?.message || err,
+        code: err?.code,
+        stack: err?.stack,
+        body: req.body
+      });
+      return res.status(500).json({
+        error: 'Failed to create brand',
+        details: err?.message || 'Unknown error'
+      });
+    }
+  }
 
   // DELETE: Soft delete (archive) a brand
   if (req.method === 'DELETE') {

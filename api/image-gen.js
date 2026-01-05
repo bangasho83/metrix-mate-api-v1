@@ -615,7 +615,8 @@ module.exports = withLogging(async (req, res) => {
     // Determine credits based on model type (pro models cost more)
     const isProModel = modelKey === 'banana-pro-text' || modelKey === 'banana-pro-image';
     const creditsPerImage = isProModel ? 50 : 25; // image-gen-pro=50, image-gen=25
-    const totalCredits = creditsPerImage * (data.images?.length || 1);
+    const actualImagesCount = data.images?.length || 0;
+    const totalCredits = creditsPerImage * (actualImagesCount || 1);
 
     // 🔍 DETAILED BILLING CALCULATION LOG
     console.log('\n========== IMAGE-GEN BILLING CALCULATION ==========');
@@ -623,7 +624,10 @@ module.exports = withLogging(async (req, res) => {
     console.log('📊 Model Name (for save):', modelNameForSave);
     console.log('📊 Is Pro Model:', isProModel);
     console.log('📊 Credits Per Image:', creditsPerImage);
-    console.log('📊 Number of Images Generated:', data.images?.length || 0);
+    console.log('📊 Requested num_images:', safeNumImages);
+    console.log('📊 Actual Images Returned by FAL:', actualImagesCount);
+    console.log('📊 data.images array:', JSON.stringify(data.images?.map(img => ({ url: img.url?.substring(0, 50) + '...' })) || []));
+    console.log('📊 Calculation:', `${creditsPerImage} credits/image × ${actualImagesCount || 1} images = ${totalCredits} credits`);
     console.log('📊 Total Credits to Charge:', totalCredits);
     console.log('📊 Event Type:', isProModel ? 'image-gen-pro' : 'image-gen');
     console.log('===================================================\n');
@@ -631,7 +635,13 @@ module.exports = withLogging(async (req, res) => {
     // Ingest billing event to Metronome if organizationId is present
     if (bodyOrgId && totalCredits > 0) {
       try {
+        console.log('🔍 [image-gen] Starting billing ingest process...');
+        console.log('🔍 [image-gen] Organization ID:', bodyOrgId);
+        console.log('🔍 [image-gen] Total Credits to Ingest:', totalCredits);
+
         const billingCustomerId = await getBillingCustomerId(bodyOrgId);
+        console.log('🔍 [image-gen] Billing Customer ID:', billingCustomerId);
+
         if (billingCustomerId) {
           const eventType = isProModel ? 'image-gen-pro' : 'image-gen';
           const properties = {
@@ -650,8 +660,10 @@ module.exports = withLogging(async (req, res) => {
           console.log('📤 Organization ID:', bodyOrgId);
           console.log('📤 Total Credits:', totalCredits);
           console.log('📤 Properties:', JSON.stringify(properties, null, 2));
+          console.log('📤 Timestamp:', new Date().toISOString());
           console.log('==============================================\n');
 
+          const ingestStartTime = Date.now();
           await metronomeService.ingestEvent({
             organization_id: bodyOrgId,
             customer_id: billingCustomerId,
@@ -659,15 +671,24 @@ module.exports = withLogging(async (req, res) => {
             timestamp: null,
             properties
           });
+          const ingestDuration = Date.now() - ingestStartTime;
 
-          console.log(`✅ [image-gen] Successfully ingested ${totalCredits} credits for ${eventType} (model: ${modelNameForSave})`);
+          console.log(`✅ [image-gen] Successfully ingested ${totalCredits} credits for ${eventType} (model: ${modelNameForSave}) in ${ingestDuration}ms`);
+          console.log(`✅ [image-gen] This billing event should appear in Metronome as: ${eventType} with ${totalCredits} credits`);
         } else {
           console.log('⚠️ [image-gen] No billingCustomerId found, skipping Metronome ingest');
         }
       } catch (billingError) {
         console.error('❌ [image-gen] Failed to ingest billing event:', billingError?.message);
+        console.error('❌ [image-gen] Billing error stack:', billingError?.stack);
         // Don't fail the request if billing fails
       }
+    } else {
+      console.log('⚠️ [image-gen] Skipping billing ingest:', {
+        hasOrgId: !!bodyOrgId,
+        totalCredits,
+        reason: !bodyOrgId ? 'No organizationId' : 'No credits to charge'
+      });
     }
 
     // Respond with minimal, useful payload
