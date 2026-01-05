@@ -256,7 +256,140 @@ curl -X GET 'https://social-apis-two.vercel.app/api/brands?organizationId=org_xy
 
 ---
 
-### 4. Delete Brand (DELETE)
+### 4. Update Brand (PUT)
+
+**Endpoint:** `PUT /api/brands`
+
+**Description:** Updates one or more fields of a brand. Uses merge mode to only update provided fields.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `brandId` | string | ✅ Yes | Brand ID to update |
+| `organizationId` | string | ✅ Yes | Organization ID (for verification) |
+| `userId` | string | ✅ Yes | User ID performing the update |
+| `data` | object | ✅ Yes | Object containing fields to update |
+
+**Protected Fields (Cannot be updated):**
+- `id`
+- `createdBy`
+- `created_at`
+- `archived`
+- `archivedAt`
+- `archivedMetadata`
+
+**Example Request - Update Single Field:**
+
+```bash
+curl -X PUT https://social-apis-two.vercel.app/api/brands \
+  -H "Content-Type: application/json" \
+  -d '{
+    "brandId": "brand_123",
+    "organizationId": "org_xyz789",
+    "userId": "user_abc123",
+    "data": {
+      "website": "https://newwebsite.com"
+    }
+  }'
+```
+
+**Example Request - Update Multiple Fields:**
+
+```bash
+curl -X PUT https://social-apis-two.vercel.app/api/brands \
+  -H "Content-Type: application/json" \
+  -d '{
+    "brandId": "brand_123",
+    "organizationId": "org_xyz789",
+    "userId": "user_abc123",
+    "data": {
+      "client_name": "Updated Brand Name",
+      "website": "https://newwebsite.com",
+      "industry": "Finance & Banking",
+      "tags": ["finance", "premium", "enterprise"],
+      "services": {
+        "posts": 30,
+        "blogs": 8,
+        "seo": "Premium SEO Package",
+        "newsletter": 4,
+        "campaigns": 5,
+        "fee": 8000,
+        "monthly_budget": 25000
+      }
+    }
+  }'
+```
+
+**Success Response (200):**
+
+```json
+{
+  "success": true,
+  "message": "Brand updated successfully",
+  "brand": {
+    "id": "brand_123",
+    "organizationId": "org_xyz789",
+    "updatedFields": ["client_name", "website", "industry", "tags", "services"],
+    "updated_at": "2025-01-05T14:30:00.000Z",
+    "lastUpdatedBy": "user_abc123"
+  }
+}
+```
+
+**Error Responses:**
+
+#### 400 - Missing Required Field
+
+```json
+{
+  "error": "Missing or invalid required field: brandId",
+  "message": "brandId must be a valid string"
+}
+```
+
+#### 400 - Empty Data Object
+
+```json
+{
+  "error": "Invalid data field",
+  "message": "data object must contain at least one field to update"
+}
+```
+
+#### 400 - Protected Fields
+
+```json
+{
+  "error": "Cannot update protected fields",
+  "message": "The following fields cannot be updated: id, createdBy",
+  "protectedFields": ["id", "createdBy"]
+}
+```
+
+#### 404 - Brand Not Found
+
+```json
+{
+  "error": "Brand not found",
+  "brandId": "brand_123"
+}
+```
+
+#### 403 - Unauthorized
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Brand does not belong to this organization",
+  "brandId": "brand_123",
+  "organizationId": "org_xyz789"
+}
+```
+
+---
+
+### 5. Delete Brand (DELETE)
 
 **Endpoint:** `DELETE /api/brands`
 
@@ -332,19 +465,24 @@ curl -X DELETE https://social-apis-two.vercel.app/api/brands \
 
 ---
 
-### 5. Restore Brand (PATCH)
+### 6. Update Brand (PATCH) - Partial Update or Restore
 
 **Endpoint:** `PATCH /api/brands`
 
-**Description:** Restores an archived brand.
+**Description:** Performs partial updates to brand fields OR restores an archived brand. Similar to PUT but more flexible.
+
+---
+
+#### Option A: Partial Update (Recommended for most updates)
 
 **Request Body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `brandId` | string | ✅ Yes | Brand ID to restore |
+| `brandId` | string | ✅ Yes | Brand ID to update |
 | `organizationId` | string | ✅ Yes | Organization ID (for verification) |
-| `userId` | string | ✅ Yes | User ID performing the restoration |
+| `userId` | string | ✅ Yes | User ID performing the update |
+| `data` | object | ✅ Yes | Object containing fields to update |
 
 **Example Request:**
 
@@ -354,7 +492,53 @@ curl -X PATCH https://social-apis-two.vercel.app/api/brands \
   -d '{
     "brandId": "brand_123",
     "organizationId": "org_xyz789",
-    "userId": "user_abc123"
+    "userId": "user_abc123",
+    "data": {
+      "website": "https://newwebsite.com",
+      "tags": ["updated", "premium"]
+    }
+  }'
+```
+
+**Success Response (200):**
+
+```json
+{
+  "success": true,
+  "message": "Brand updated successfully",
+  "brand": {
+    "id": "brand_123",
+    "organizationId": "org_xyz789",
+    "updatedFields": ["website", "tags"],
+    "updated_at": "2025-01-05T14:30:00.000Z",
+    "lastUpdatedBy": "user_abc123"
+  }
+}
+```
+
+---
+
+#### Option B: Restore Archived Brand
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `brandId` | string | ✅ Yes | Brand ID to restore |
+| `organizationId` | string | ✅ Yes | Organization ID (for verification) |
+| `userId` | string | ✅ Yes | User ID performing the restoration |
+| `restore` | boolean | ✅ Yes | Must be `true` to restore |
+
+**Example Request:**
+
+```bash
+curl -X PATCH https://social-apis-two.vercel.app/api/brands \
+  -H "Content-Type: application/json" \
+  -d '{
+    "brandId": "brand_123",
+    "organizationId": "org_xyz789",
+    "userId": "user_abc123",
+    "restore": true
   }'
 ```
 
@@ -374,13 +558,22 @@ curl -X PATCH https://social-apis-two.vercel.app/api/brands \
 
 **Error Responses:**
 
-#### 400 - Not Archived
+#### 400 - Not Archived (when restore=true)
 
 ```json
 {
   "error": "Brand is not archived",
   "brandId": "brand_123",
   "message": "Only archived brands can be restored"
+}
+```
+
+#### 400 - Missing Data (when restore is not true)
+
+```json
+{
+  "error": "Missing or invalid required field: data",
+  "message": "data must be an object containing fields to update"
 }
 ```
 

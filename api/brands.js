@@ -2,6 +2,7 @@
  * Brands API
  * GET /api/brands?organizationId=ORG_ID - Returns brand documents (excludes archived)
  * POST /api/brands - Create a new brand
+ * PUT /api/brands - Update brand fields
  * DELETE /api/brands - Soft delete (archive) a brand
  * PATCH /api/brands - Restore an archived brand
  */
@@ -13,7 +14,7 @@ export const config = { maxDuration: 30 };
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -144,6 +145,129 @@ export default async function handler(req, res) {
     }
   }
 
+  // PUT: Update brand fields
+  if (req.method === 'PUT') {
+    try {
+      const body = req.body || {};
+      const { brandId, organizationId, userId, data } = body;
+
+      // Validate required parameters
+      if (!brandId || typeof brandId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: brandId',
+          message: 'brandId must be a valid string'
+        });
+      }
+
+      if (!organizationId || typeof organizationId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: organizationId',
+          message: 'organizationId must be a valid string'
+        });
+      }
+
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: userId',
+          message: 'userId must be a valid string (user ID performing the update)'
+        });
+      }
+
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: data',
+          message: 'data must be an object containing fields to update'
+        });
+      }
+
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({
+          error: 'Invalid data field',
+          message: 'data object must contain at least one field to update'
+        });
+      }
+
+      // Get the brand document
+      const brandRef = db.collection('brands').doc(brandId);
+      const brandDoc = await brandRef.get();
+
+      if (!brandDoc.exists) {
+        return res.status(404).json({
+          error: 'Brand not found',
+          brandId
+        });
+      }
+
+      const brandData = brandDoc.data();
+
+      // Verify the brand belongs to the organization
+      if (brandData.organizationId !== organizationId) {
+        return res.status(403).json({
+          error: 'Unauthorized',
+          message: 'Brand does not belong to this organization',
+          brandId,
+          organizationId
+        });
+      }
+
+      // Prevent updating certain protected fields
+      const protectedFields = ['id', 'createdBy', 'created_at', 'archived', 'archivedAt', 'archivedMetadata'];
+      const attemptedProtectedFields = Object.keys(data).filter(key => protectedFields.includes(key));
+
+      if (attemptedProtectedFields.length > 0) {
+        return res.status(400).json({
+          error: 'Cannot update protected fields',
+          message: `The following fields cannot be updated: ${attemptedProtectedFields.join(', ')}`,
+          protectedFields: attemptedProtectedFields
+        });
+      }
+
+      // Prepare update data
+      const now = new Date();
+      const timestamp = db.FieldValue ? db.FieldValue.serverTimestamp() : now;
+
+      const updateData = {
+        ...data,
+        updated_at: timestamp,
+        lastUpdatedBy: userId
+      };
+
+      // Perform the update
+      await brandRef.update(updateData);
+
+      console.log('Brand updated successfully:', {
+        brandId,
+        organizationId,
+        userId,
+        updatedFields: Object.keys(data),
+        timestamp: now.toISOString()
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Brand updated successfully',
+        brand: {
+          id: brandId,
+          organizationId,
+          updatedFields: Object.keys(data),
+          updated_at: now.toISOString(),
+          lastUpdatedBy: userId
+        }
+      });
+    } catch (err) {
+      console.error('PUT brand error:', {
+        message: err?.message || err,
+        code: err?.code,
+        stack: err?.stack,
+        body: req.body
+      });
+      return res.status(500).json({
+        error: 'Failed to update brand',
+        details: err?.message || 'Unknown error'
+      });
+    }
+  }
+
   // DELETE: Soft delete (archive) a brand
   if (req.method === 'DELETE') {
     try {
@@ -254,11 +378,11 @@ export default async function handler(req, res) {
     }
   }
 
-  // PATCH: Restore an archived brand
+  // PATCH: Partial update of brand fields OR restore an archived brand
   if (req.method === 'PATCH') {
     try {
       const body = req.body || {};
-      const { brandId, organizationId, userId } = body;
+      const { brandId, organizationId, userId, data, restore } = body;
 
       // Validate required parameters
       if (!brandId || typeof brandId !== 'string') {
@@ -305,47 +429,107 @@ export default async function handler(req, res) {
         });
       }
 
-      // Check if brand is archived
-      if (brandData.archived !== true) {
-        return res.status(400).json({
-          error: 'Brand is not archived',
-          brandId,
-          message: 'Only archived brands can be restored'
-        });
-      }
-
-      // Perform restore (unarchive)
       const now = new Date();
       const timestamp = db.FieldValue ? db.FieldValue.serverTimestamp() : now;
 
-      const restoreData = {
-        archived: false,
-        archivedAt: null,
-        updatedAt: timestamp
+      // CASE 1: Restore archived brand (restore=true)
+      if (restore === true) {
+        // Check if brand is archived
+        if (brandData.archived !== true) {
+          return res.status(400).json({
+            error: 'Brand is not archived',
+            brandId,
+            message: 'Only archived brands can be restored'
+          });
+        }
+
+        // Perform restore (unarchive)
+        const restoreData = {
+          archived: false,
+          archivedAt: null,
+          updated_at: timestamp
+        };
+
+        await brandRef.update(restoreData);
+
+        console.log('Brands API - Brand restored:', {
+          brandId,
+          organizationId,
+          userId,
+          restoredAt: now.toISOString()
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: 'Brand restored successfully',
+          brand: {
+            id: brandId,
+            organizationId,
+            restoredAt: now.toISOString()
+          }
+        });
+      }
+
+      // CASE 2: Partial update of brand fields (data provided)
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return res.status(400).json({
+          error: 'Missing or invalid required field: data',
+          message: 'data must be an object containing fields to update'
+        });
+      }
+
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({
+          error: 'Invalid data field',
+          message: 'data object must contain at least one field to update'
+        });
+      }
+
+      // Prevent updating certain protected fields
+      const protectedFields = ['id', 'createdBy', 'created_at', 'archived', 'archivedAt', 'archivedMetadata'];
+      const attemptedProtectedFields = Object.keys(data).filter(key => protectedFields.includes(key));
+
+      if (attemptedProtectedFields.length > 0) {
+        return res.status(400).json({
+          error: 'Cannot update protected fields',
+          message: `The following fields cannot be updated: ${attemptedProtectedFields.join(', ')}`,
+          protectedFields: attemptedProtectedFields
+        });
+      }
+
+      // Prepare update data
+      const updateData = {
+        ...data,
+        updated_at: timestamp,
+        lastUpdatedBy: userId
       };
 
-      await brandRef.update(restoreData);
+      // Perform the update
+      await brandRef.update(updateData);
 
-      console.log('Brands API - Brand restored:', {
+      console.log('Brand updated successfully (PATCH):', {
         brandId,
         organizationId,
         userId,
-        restoredAt: now.toISOString()
+        updatedFields: Object.keys(data),
+        timestamp: now.toISOString()
       });
 
       return res.status(200).json({
         success: true,
-        message: 'Brand restored successfully',
+        message: 'Brand updated successfully',
         brand: {
           id: brandId,
           organizationId,
-          restoredAt: now.toISOString()
+          updatedFields: Object.keys(data),
+          updated_at: now.toISOString(),
+          lastUpdatedBy: userId
         }
       });
     } catch (err) {
-      console.error('Brands API - Restore error:', err?.message || err);
+      console.error('Brands API - PATCH error:', err?.message || err);
       return res.status(500).json({
-        error: 'Failed to restore brand',
+        error: 'Failed to update brand',
         details: err?.message || 'Unknown error'
       });
     }
