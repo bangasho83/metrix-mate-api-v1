@@ -133,11 +133,86 @@ curl -X POST https://social-apis-two.vercel.app/api/brands \
 
 ---
 
-### 2. Get Brands (GET)
+### 2. Get Single Brand (GET)
+
+**Endpoint:** `GET /api/brands?brandId=BRAND_ID`
+
+**Description:** Retrieves a single brand by its ID. Returns 410 if the brand is archived (unless `includeArchived=true`).
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `brandId` | string | ✅ Yes | Brand ID to retrieve |
+| `includeArchived` | boolean | ❌ No | Include archived brand (default: false) |
+
+**Example Request:**
+
+```bash
+curl -X GET 'https://social-apis-two.vercel.app/api/brands?brandId=brand_123'
+```
+
+**Success Response (200):**
+
+```json
+{
+  "success": true,
+  "brand": {
+    "id": "brand_123",
+    "client_name": "Example Brand Inc",
+    "organizationId": "org_xyz789",
+    "website": "https://example.com",
+    "industry": "Technology & SaaS",
+    "country": "United Arab Emirates",
+    "tags": ["premium", "enterprise", "tech"],
+    "currency_symbol": "AED",
+    "brand_guidelines": "<h2>Mission & Vision</h2>...",
+    "services": {
+      "posts": 20,
+      "blogs": 4,
+      "seo": "Full SEO Audit",
+      "newsletter": 2,
+      "campaigns": 3,
+      "fee": 5000,
+      "monthly_budget": 15000
+    },
+    "created_at": "2025-01-05T12:00:00.000Z",
+    "updated_at": "2025-01-05T12:00:00.000Z",
+    "createdBy": "user_abc123",
+    "archived": false
+  }
+}
+```
+
+**Error Responses:**
+
+#### 404 - Brand Not Found
+
+```json
+{
+  "error": "Brand not found",
+  "brandId": "brand_123"
+}
+```
+
+#### 410 - Brand Archived
+
+```json
+{
+  "error": "Brand is archived",
+  "brandId": "brand_123",
+  "archivedAt": "2025-01-05T12:00:00.000Z",
+  "message": "This brand has been archived. Use includeArchived=true to view it."
+}
+```
+
+---
+
+### 3. Get Brands List (GET)
 
 **Endpoint:** `GET /api/brands`
 
-**Description:** Retrieves brand documents. Excludes archived brands by default.
+**Description:** Retrieves multiple brand documents. Excludes archived brands by default.
 
 **Query Parameters:**
 
@@ -181,7 +256,7 @@ curl -X GET 'https://social-apis-two.vercel.app/api/brands?organizationId=org_xy
 
 ---
 
-### 3. Delete Brand (DELETE)
+### 4. Delete Brand (DELETE)
 
 **Endpoint:** `DELETE /api/brands`
 
@@ -257,7 +332,7 @@ curl -X DELETE https://social-apis-two.vercel.app/api/brands \
 
 ---
 
-### 4. Restore Brand (PATCH)
+### 5. Restore Brand (PATCH)
 
 **Endpoint:** `PATCH /api/brands`
 

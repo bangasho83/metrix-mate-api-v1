@@ -351,11 +351,53 @@ export default async function handler(req, res) {
     }
   }
 
-  // GET: List brands (excludes archived by default)
+  // GET: Get single brand by brandId OR list brands (excludes archived by default)
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { organizationId, seo, includeArchived, onlyArchived } = req.query || {};
+  const { brandId, organizationId, seo, includeArchived, onlyArchived } = req.query || {};
 
+  // GET single brand by brandId
+  if (brandId) {
+    try {
+      const brandRef = db.collection('brands').doc(brandId);
+      const brandDoc = await brandRef.get();
+
+      if (!brandDoc.exists) {
+        return res.status(404).json({
+          error: 'Brand not found',
+          brandId
+        });
+      }
+
+      const brandData = brandDoc.data();
+
+      // Check if brand is archived and should be hidden
+      if (brandData.archived === true && includeArchived !== 'true') {
+        return res.status(410).json({
+          error: 'Brand is archived',
+          brandId,
+          archivedAt: brandData.archivedAt,
+          message: 'This brand has been archived. Use includeArchived=true to view it.'
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        brand: {
+          id: brandDoc.id,
+          ...brandData
+        }
+      });
+    } catch (err) {
+      console.error('Brands API - Get single brand error:', err?.message || err);
+      return res.status(500).json({
+        error: 'Failed to fetch brand',
+        details: err?.message || 'Unknown error'
+      });
+    }
+  }
+
+  // GET list of brands
   try {
     let snap;
 

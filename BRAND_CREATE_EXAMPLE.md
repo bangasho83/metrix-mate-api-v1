@@ -1,4 +1,35 @@
-# Brand Creation API - Quick Reference
+# Brands API - Quick Reference
+
+## Get Single Brand Details
+
+```bash
+curl -X GET 'https://social-apis-two.vercel.app/api/brands?brandId=brand_123'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "brand": {
+    "id": "brand_123",
+    "client_name": "Example Brand Inc",
+    "organizationId": "org_xyz789",
+    "website": "https://example.com",
+    "industry": "Technology & SaaS",
+    "country": "United Arab Emirates",
+    "tags": ["premium", "enterprise", "tech"],
+    "currency_symbol": "AED",
+    "services": {
+      "posts": 20,
+      "blogs": 4,
+      "seo": "Full SEO Audit"
+    },
+    "created_at": "2025-01-05T12:00:00.000Z"
+  }
+}
+```
+
+---
 
 ## Sample cURL Command to Add a Brand
 
